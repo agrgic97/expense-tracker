@@ -1,54 +1,28 @@
 import { reactive } from 'vue'
 
-export interface Session {
-  token: string
+export interface User {
   username: string
-  expiresAt: string
 }
 
-const STORAGE_KEY = 'expense-tracker.session'
+/**
+ * Who is logged in. The tokens themselves live in httpOnly cookies that scripts cannot read,
+ * so this only mirrors what the server confirmed.
+ */
+export const auth = reactive({ user: null as User | null })
 
-function isValid(session: Session | null): session is Session {
-  return !!session && new Date(session.expiresAt).getTime() > Date.now()
+export const isAuthenticated = () => auth.user !== null
+
+export function setUser(user: User) {
+  auth.user = user
 }
 
-function restore(): Session | null {
-  try {
-    const session = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as Session | null
-    return isValid(session) ? session : null
-  } catch {
-    return null
-  }
+export function clearUser() {
+  auth.user = null
 }
 
-export const auth = reactive({ session: restore() })
-
-export function setSession(session: Session) {
-  auth.session = session
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session))
-  } catch {
-    // storage unavailable: session lives only in memory
-  }
+// Tokens were kept in localStorage before they moved to cookies; remove leftovers
+try {
+  localStorage.removeItem('expense-tracker.session')
+} catch {
+  // storage unavailable
 }
-
-export function clearSession() {
-  auth.session = null
-  try {
-    localStorage.removeItem(STORAGE_KEY)
-  } catch {
-    // ignore
-  }
-}
-
-/** Returns the bearer token, or null (and logs out) once it has expired. */
-export function currentToken(): string | null {
-  if (!auth.session) return null
-  if (!isValid(auth.session)) {
-    clearSession()
-    return null
-  }
-  return auth.session.token
-}
-
-export const isAuthenticated = () => currentToken() !== null

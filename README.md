@@ -26,12 +26,24 @@ App: http://localhost:8080 (Port über `APP_PORT` änderbar). Die Daten liegen i
 
 ## Authentifizierung
 
-- `POST /api/auth/register` bzw. `POST /api/auth/login` mit `{ "username", "password" }` liefern `{ token, expiresAt, username }`.
-- Alle anderen `/api`-Endpunkte erwarten `Authorization: Bearer <token>`. Das Token ist ein HS256-signiertes JWT (Subject = Benutzer-ID).
-- Passwörter werden mit BCrypt gehasht. Es gibt kein Refresh-Token: Nach Ablauf (`JWT_EXPIRATION`, Standard 7 Tage) meldet man sich neu an.
-- **Erster Benutzer:** Wer sich als Erstes registriert, übernimmt alle Ausgaben und Kategorien, die vor Einführung der Anmeldung angelegt wurden. Jeder weitere Benutzer startet mit den Standardkategorien.
-- `JWT_SECRET` in `.env` setzen (mind. 32 Zeichen, z. B. `openssl rand -base64 48`). Ohne ihn wird bei jedem Start ein zufälliger Schlüssel erzeugt, dann sind nach einem Neustart alle abgemeldet.
-- Nachdem alle Konten angelegt sind, kann die Registrierung mit `REGISTRATION_ENABLED=false` abgeschaltet werden.
+- **Login/Registrierung:** `POST /api/auth/login` bzw. `/api/auth/register` mit `{ "username", "password" }`. Passwörter werden mit BCrypt gehasht.
+- **Tokens in httpOnly-Cookies:** JavaScript im Browser kann sie nicht lesen, XSS kann sie also nicht stehlen.
+  - `access_token`: HS256-JWT, 15 Minuten gültig (`ACCESS_TOKEN_VALIDITY`), `Path=/api`
+  - `refresh_token`: zufällig, 30 Tage gültig (`REFRESH_TOKEN_VALIDITY`), `Path=/api/auth`. In der DB steht nur sein SHA-256-Hash.
+  - Beide Cookies sind `SameSite=Strict`. Hinter HTTPS `COOKIE_SECURE=true` setzen.
+- **Refresh mit Rotation:** `POST /api/auth/refresh` tauscht das Refresh-Token gegen ein neues. Das Frontend tut das automatisch, sobald eine Anfrage mit 401 scheitert, und wiederholt sie dann.
+  - Wird ein bereits getauschtes Token erneut benutzt, gilt es als gestohlen. Alle Tokens dieser Anmeldung werden widerrufen.
+  - Ausnahme: Innerhalb von 30 s gibt es nur ein neues Access-Token, damit parallele Tabs sich nicht gegenseitig abmelden.
+- **Logout:** `POST /api/auth/logout` widerruft die Anmeldung und löscht die Cookies.
+- **CSRF-Schutz:** Weil der Browser Cookies automatisch mitschickt, brauchen schreibende Anfragen den Header `X-XSRF-TOKEN` mit dem Wert des Cookies `XSRF-TOKEN`. Ausnahme sind Anfragen mit `Authorization: Bearer …` (Skripte, curl).
+- **Rate-Limit für Login und Registrierung:**
+  - 5 Fehlversuche pro Benutzer und IP
+  - 20 Fehlversuche pro Benutzer insgesamt
+  - 30 Versuche pro IP
+  - Alle Grenzen gelten je 15 Minuten. Danach antwortet die API mit `429` und `Retry-After`.
+  - Die Zähler liegen im Speicher und werden bei einem Neustart zurückgesetzt.
+- **Erster Benutzer:** Wer sich als Erstes registriert, übernimmt alle Daten, die vor Einführung der Anmeldung angelegt wurden. Jeder weitere Benutzer startet mit den Standardkategorien.
+- **`JWT_SECRET`** in `.env` setzen (mind. 32 Zeichen, z. B. `openssl rand -base64 48`). Mit `REGISTRATION_ENABLED=false` lässt sich die Registrierung abschalten.
 
 ## Lokale Entwicklung
 
@@ -56,7 +68,8 @@ Browser ──> nginx (frontend, :80)
 | Methode | Pfad | Beschreibung |
 |---|---|---|
 | GET | `/api/auth/config` | Ob die Registrierung offen ist (öffentlich) |
-| POST | `/api/auth/register`, `/api/auth/login` | Konto anlegen bzw. anmelden → JWT (öffentlich) |
+| POST | `/api/auth/register`, `/api/auth/login` | Konto anlegen bzw. anmelden, setzt Token-Cookies (öffentlich) |
+| POST | `/api/auth/refresh`, `/api/auth/logout` | Tokens erneuern bzw. abmelden (öffentlich, per Refresh-Cookie) |
 | GET | `/api/auth/me` | Angemeldeter Benutzer |
 | GET | `/api/expenses?from&to&categoryId&q&page&size` | Ausgaben (paginiert, neueste zuerst) |
 | GET | `/api/expenses/export?…` | CSV-Export mit denselben Filtern |

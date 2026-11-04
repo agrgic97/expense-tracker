@@ -1,4 +1,4 @@
-import { clearSession, currentToken, type Session } from './auth'
+import { clearUser, setUser, type User } from './auth'
 
 export type PeriodType = 'WEEK' | 'MONTH' | 'YEAR'
 
@@ -96,18 +96,50 @@ export interface Credentials {
   password: string
 }
 
-async function send(path: string, init?: RequestInit): Promise<Response> {
-  const token = currentToken()
+const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS']
+// Endpoints whose 401 means "wrong credentials" or "no session" rather than "access token expired"
+const NO_REFRESH = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout']
+
+function readCookie(name: string): string | null {
+  const match = document.cookie.split('; ').find((c) => c.startsWith(`${name}=`))
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : null
+}
+
+/** The server sets the XSRF-TOKEN cookie on every response; fetch one if we have none yet. */
+async function csrfToken(): Promise<string | null> {
+  if (!readCookie('XSRF-TOKEN')) await fetch('/api/auth/config', { credentials: 'same-origin' })
+  return readCookie('XSRF-TOKEN')
+}
+
+let refreshing: Promise<boolean> | null = null
+
+/** Exchanges the refresh cookie for new tokens. Concurrent callers share one request. */
+function refreshSession(): Promise<boolean> {
+  refreshing ??= send('/auth/refresh', { method: 'POST' }, false)
+    .then((response) => response.ok)
+    .catch(() => false)
+    .finally(() => {
+      refreshing = null
+    })
+  return refreshing
+}
+
+async function send(path: string, init: RequestInit = {}, retryOn401 = true): Promise<Response> {
+  const method = (init.method ?? 'GET').toUpperCase()
+  const csrf = SAFE_METHODS.includes(method) ? null : await csrfToken()
   const response = await fetch(`/api${path}`, {
     ...init,
+    credentials: 'same-origin',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...init?.headers,
+      ...(csrf ? { 'X-XSRF-TOKEN': csrf } : {}),
+      ...init.headers,
     },
   })
-  // An invalid or expired token ends the session; login failures are handled by the login form
-  if (response.status === 401 && !path.startsWith('/auth/')) clearSession()
+  if (response.status !== 401 || !retryOn401 || NO_REFRESH.includes(path)) return response
+  // Access token expired (or missing): refresh once and retry, otherwise the session is over
+  if (await refreshSession()) return send(path, init, false)
+  clearUser()
   return response
 }
 
@@ -137,8 +169,27 @@ export function queryString(params: object): string {
 
 export const api = {
   authConfig: () => request<{ registrationEnabled: boolean }>('/auth/config'),
-  login: (body: Credentials) => request<Session>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
-  register: (body: Credentials) => request<Session>('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+  async login(body: Credentials) {
+    setUser(await request<User>('/auth/login', { method: 'POST', body: JSON.stringify(body) }))
+  },
+  async register(body: Credentials) {
+    setUser(await request<User>('/auth/register', { method: 'POST', body: JSON.stringify(body) }))
+  },
+  async logout() {
+    try {
+      await send('/auth/logout', { method: 'POST' })
+    } finally {
+      clearUser()
+    }
+  },
+  /** Checks for an existing session (refreshing it if needed) after a page load. */
+  async restoreSession() {
+    try {
+      setUser(await request<User>('/auth/me'))
+    } catch {
+      clearUser()
+    }
+  },
 
   categories: () => request<Category[]>('/categories'),
   createCategory: (body: Pick<Category, 'name' | 'color'>) =>

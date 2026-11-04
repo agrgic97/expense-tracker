@@ -1,6 +1,5 @@
 package com.expensetracker.auth;
 
-import com.expensetracker.auth.AuthDtos.TokenResponse;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -18,17 +17,20 @@ public class TokenService {
     public static final String ISSUER = "expense-tracker";
     public static final String USERNAME_CLAIM = "username";
 
+    public record AccessToken(String value, Instant expiresAt) {
+    }
+
     private final JwtEncoder encoder;
     private final Duration validity;
     private final Clock clock;
 
     public TokenService(JwtEncoder encoder, AuthProperties properties, Clock clock) {
         this.encoder = encoder;
-        this.validity = properties.tokenValidity();
+        this.validity = properties.accessTokenValidity();
         this.clock = clock;
     }
 
-    public TokenResponse issue(AppUser user) {
+    public AccessToken issue(AppUser user) {
         // JWT timestamps have second precision; truncate so the reported expiry matches the token
         Instant now = clock.instant().truncatedTo(ChronoUnit.SECONDS);
         Instant expiresAt = now.plus(validity);
@@ -40,7 +42,6 @@ public class TokenService {
                 .expiresAt(expiresAt)
                 .build();
         JwsHeader header = JwsHeader.with(MacAlgorithm.HS256).build();
-        String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
-        return new TokenResponse(token, expiresAt, user.getUsername());
+        return new AccessToken(encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue(), expiresAt);
     }
 }

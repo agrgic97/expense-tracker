@@ -22,12 +22,22 @@ app:
   auth:
     # HMAC key for signing JWTs (min. 32 characters). If empty, a random key is generated at startup.
     jwt-secret: ${JWT_SECRET:}
-    token-validity: ${JWT_EXPIRATION:7d}
+    access-token-validity: ${ACCESS_TOKEN_VALIDITY:15m}
+    refresh-token-validity: ${REFRESH_TOKEN_VALIDITY:30d}
+    # Must be true when the app is served over HTTPS
+    cookie-secure: ${COOKIE_SECURE:false}
     registration-enabled: ${REGISTRATION_ENABLED:true}
+    rate-limit:
+      window: ${LOGIN_RATE_LIMIT_WINDOW:15m}
+      max-failures-per-user-and-ip: 5
+      max-failures-per-user: 20
+      max-attempts-per-ip: 30
 
 server:
   port: 8080
   shutdown: graceful
+  # Trust X-Forwarded-For from the nginx container so rate limiting sees the real client IP
+  forward-headers-strategy: native
 
 management:
   endpoints:

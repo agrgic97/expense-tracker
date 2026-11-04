@@ -7,9 +7,9 @@ import './style.css'
 
 // Leave protected pages as soon as the session ends (logout, expiry or a rejected token)
 watch(
-  () => auth.session,
-  (session) => {
-    if (session) return
+  () => auth.user,
+  (user) => {
+    if (user) return
     closeExpenseModal(false)
     const route = router.currentRoute.value
     if (!route.meta.public) {

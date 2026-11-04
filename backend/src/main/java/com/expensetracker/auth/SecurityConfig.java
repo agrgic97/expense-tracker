@@ -30,7 +30,10 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 
 @Configuration
 @EnableConfigurationProperties(AuthProperties.class)
@@ -42,18 +45,51 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
-                // Stateless API authenticated by bearer tokens, so there is no session cookie to protect from CSRF
-                .csrf(AbstractHttpConfigurer::disable)
+                // Cookies are sent automatically by the browser, so state-changing requests need a CSRF token.
+                // Clients sending an explicit Authorization header (scripts, curl) cannot be forged cross-site.
+                .csrf(csrf -> csrf
+                        .csrfTokenRepository(csrfTokenRepository())
+                        .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler())
+                        .ignoringRequestMatchers(request -> request.getHeader("Authorization") != null))
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.POST,
+                                "/api/auth/login", "/api/auth/register", "/api/auth/refresh", "/api/auth/logout")
+                        .permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/auth/config").permitAll()
                         .requestMatchers("/actuator/health", "/error").permitAll()
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()))
+                .oauth2ResourceServer(oauth -> oauth
+                        .bearerTokenResolver(bearerTokenResolver())
+                        .jwt(Customizer.withDefaults()))
                 .build();
+    }
+
+    private static CookieCsrfTokenRepository csrfTokenRepository() {
+        CookieCsrfTokenRepository repository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        repository.setCookieCustomizer(cookie -> cookie.path("/").sameSite("Strict"));
+        return repository;
+    }
+
+    /**
+     * Reads the access token from the Authorization header or, for the browser app, from the httpOnly cookie.
+     * The cookie is ignored on the public auth endpoints so a stale token can never block login or refresh.
+     */
+    static BearerTokenResolver bearerTokenResolver() {
+        DefaultBearerTokenResolver headerResolver = new DefaultBearerTokenResolver();
+        return request -> {
+            String fromHeader = headerResolver.resolve(request);
+            if (fromHeader != null) {
+                return fromHeader;
+            }
+            String path = request.getRequestURI();
+            if (path.startsWith("/api/auth/") && !path.equals("/api/auth/me")) {
+                return null;
+            }
+            return AuthCookies.value(request, AuthCookies.ACCESS).orElse(null);
+        };
     }
 
     @Bean

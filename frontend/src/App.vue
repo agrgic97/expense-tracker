@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
 import ExpenseDialog from './components/ExpenseDialog.vue'
-import { auth, clearSession } from './lib/auth'
+import { api } from './lib/api'
+import { auth } from './lib/auth'
 import { expenseModal, openExpenseModal } from './lib/expenseModal'
 
 const route = useRoute()
@@ -25,8 +26,8 @@ const links = [
       </nav>
       <button class="primary add" @click="openExpenseModal()">＋ <span class="label">Neue Ausgabe</span></button>
       <div class="account">
-        <span class="user label" :title="auth.session?.username">👤 {{ auth.session?.username }}</span>
-        <button class="ghost" title="Abmelden" @click="clearSession">⎋ <span class="label">Abmelden</span></button>
+        <span class="user label" :title="auth.user?.username">👤 {{ auth.user?.username }}</span>
+        <button class="ghost" title="Abmelden" @click="api.logout()">⎋ <span class="label">Abmelden</span></button>
       </div>
     </aside>
     <main class="content">

@@ -2,7 +2,6 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../lib/api'
-import { setSession } from '../lib/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -41,7 +40,7 @@ async function submit() {
   error.value = ''
   try {
     const credentials = { username: form.username.trim(), password: form.password }
-    setSession(isRegister.value ? await api.register(credentials) : await api.login(credentials))
+    await (isRegister.value ? api.register(credentials) : api.login(credentials))
     const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
       ? route.query.redirect : '/'
     router.replace(redirect)

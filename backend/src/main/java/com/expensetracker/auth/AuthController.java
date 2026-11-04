@@ -3,8 +3,12 @@ package com.expensetracker.auth;
 import com.expensetracker.auth.AuthDtos.AuthConfig;
 import com.expensetracker.auth.AuthDtos.LoginRequest;
 import com.expensetracker.auth.AuthDtos.RegisterRequest;
-import com.expensetracker.auth.AuthDtos.TokenResponse;
+import com.expensetracker.auth.AuthDtos.SessionResponse;
 import com.expensetracker.auth.AuthDtos.UserResponse;
+import com.expensetracker.auth.AuthService.Session;
+import com.expensetracker.common.UnauthorizedException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,10 +23,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService service;
+    private final AuthCookies cookies;
     private final CurrentUser currentUser;
 
-    public AuthController(AuthService service, CurrentUser currentUser) {
+    public AuthController(AuthService service, AuthCookies cookies, CurrentUser currentUser) {
         this.service = service;
+        this.cookies = cookies;
         this.currentUser = currentUser;
     }
 
@@ -33,17 +39,43 @@ public class AuthController {
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    public TokenResponse register(@Valid @RequestBody RegisterRequest request) {
-        return service.register(request);
+    public SessionResponse register(@Valid @RequestBody RegisterRequest body, HttpServletRequest request,
+                                    HttpServletResponse response) {
+        return respond(service.register(body, request.getRemoteAddr()), response);
     }
 
     @PostMapping("/login")
-    public TokenResponse login(@Valid @RequestBody LoginRequest request) {
-        return service.login(request);
+    public SessionResponse login(@Valid @RequestBody LoginRequest body, HttpServletRequest request,
+                                 HttpServletResponse response) {
+        return respond(service.login(body, request.getRemoteAddr()), response);
+    }
+
+    @PostMapping("/refresh")
+    public SessionResponse refresh(HttpServletRequest request, HttpServletResponse response) {
+        String token = cookies.refreshToken(request)
+                .orElseThrow(() -> new UnauthorizedException("Nicht angemeldet"));
+        try {
+            return respond(service.refresh(token), response);
+        } catch (UnauthorizedException e) {
+            cookies.clear(response);
+            throw e;
+        }
+    }
+
+    @PostMapping("/logout")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void logout(HttpServletRequest request, HttpServletResponse response) {
+        cookies.refreshToken(request).ifPresent(service::logout);
+        cookies.clear(response);
     }
 
     @GetMapping("/me")
     public UserResponse me() {
         return new UserResponse(currentUser.id(), currentUser.username());
+    }
+
+    private SessionResponse respond(Session session, HttpServletResponse response) {
+        cookies.write(response, session.accessToken(), session.refreshToken());
+        return new SessionResponse(session.user().getUsername(), session.accessToken().expiresAt());
     }
 }

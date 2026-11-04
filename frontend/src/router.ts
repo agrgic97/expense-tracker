@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { api } from './lib/api'
 import { isAuthenticated } from './lib/auth'
 import DashboardView from './views/DashboardView.vue'
 
@@ -13,7 +14,11 @@ export const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
+let sessionChecked: Promise<void> | null = null
+
+router.beforeEach(async (to) => {
+  // On the first navigation ask the server whether the cookies still hold a valid session
+  await (sessionChecked ??= api.restoreSession())
   const loggedIn = isAuthenticated()
   if (to.meta.public) return loggedIn && to.name === 'login' ? '/' : true
   return loggedIn ? true : { name: 'login', query: to.fullPath === '/' ? {} : { redirect: to.fullPath } }

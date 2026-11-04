@@ -22,7 +22,8 @@ public final class AuthDtos {
             @NotBlank @Size(min = 8, max = 72, message = "muss 8–72 Zeichen lang sein") String password) {
     }
 
-    public record TokenResponse(String token, Instant expiresAt, String username) {
+    /** Tokens travel only in httpOnly cookies; the body tells the client who is logged in. */
+    public record SessionResponse(String username, Instant accessTokenExpiresAt) {
     }
 
     public record UserResponse(Long id, String username) {
