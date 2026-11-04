@@ -18,6 +18,13 @@ spring:
     serialization:
       write-dates-as-timestamps: false
 
+app:
+  auth:
+    # HMAC key for signing JWTs (min. 32 characters). If empty, a random key is generated at startup.
+    jwt-secret: ${JWT_SECRET:}
+    token-validity: ${JWT_EXPIRATION:7d}
+    registration-enabled: ${REGISTRATION_ENABLED:true}
+
 server:
   port: 8080
   shutdown: graceful

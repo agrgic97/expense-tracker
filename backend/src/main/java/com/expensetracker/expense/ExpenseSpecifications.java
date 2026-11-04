@@ -11,9 +11,10 @@ final class ExpenseSpecifications {
     private ExpenseSpecifications() {
     }
 
-    static Specification<Expense> matching(ExpenseFilter filter) {
+    static Specification<Expense> matching(Long userId, ExpenseFilter filter) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+            predicates.add(cb.equal(root.get("userId"), userId));
             if (filter.from() != null) {
                 predicates.add(cb.greaterThanOrEqualTo(root.<LocalDate>get("date"), filter.from()));
             }

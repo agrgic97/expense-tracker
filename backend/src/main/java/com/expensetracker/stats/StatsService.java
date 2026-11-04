@@ -1,5 +1,6 @@
 package com.expensetracker.stats;
 
+import com.expensetracker.auth.CurrentUser;
 import com.expensetracker.category.Category;
 import com.expensetracker.expense.Expense;
 import com.expensetracker.expense.ExpenseDto;
@@ -28,18 +29,21 @@ public class StatsService {
     private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
 
     private final ExpenseRepository expenses;
+    private final CurrentUser currentUser;
     private final Clock clock;
 
-    public StatsService(ExpenseRepository expenses, Clock clock) {
+    public StatsService(ExpenseRepository expenses, CurrentUser currentUser, Clock clock) {
         this.expenses = expenses;
+        this.currentUser = currentUser;
         this.clock = clock;
     }
 
     public Summary summary(PeriodType type, LocalDate date) {
+        Long userId = currentUser.id();
         LocalDate today = LocalDate.now(clock);
         DateRange range = DateRange.of(type, date);
         boolean current = range.contains(today);
-        List<Expense> items = expenses.findAllInRange(range.start(), range.end());
+        List<Expense> items = expenses.findAllInRange(userId, range.start(), range.end());
 
         BigDecimal total = sum(items);
         long count = items.size();
@@ -53,7 +57,7 @@ public class StatsService {
                 : null;
 
         DateRange previous = DateRange.of(type, range.start().minusDays(1));
-        BigDecimal previousTotal = expenses.sumInRange(previous.start(), previous.end());
+        BigDecimal previousTotal = expenses.sumInRange(userId, previous.start(), previous.end());
         // Compare a running period against the same stretch of the previous one (e.g. 1.-4. Nov vs. 1.-4. Okt).
         BigDecimal previousComparableTotal = previousTotal;
         if (current) {
@@ -61,7 +65,7 @@ public class StatsService {
             if (comparableEnd.isAfter(previous.end())) {
                 comparableEnd = previous.end();
             }
-            previousComparableTotal = expenses.sumInRange(previous.start(), comparableEnd);
+            previousComparableTotal = expenses.sumInRange(userId, previous.start(), comparableEnd);
         }
         BigDecimal changePercent = previousComparableTotal.signum() == 0 ? null
                 : total.subtract(previousComparableTotal)
@@ -79,7 +83,7 @@ public class StatsService {
         LocalDate firstStart = type.startOf(last.start().minus(periods - 1L, type.unit()));
         DateRange whole = new DateRange(firstStart, last.end());
 
-        List<Bucket> buckets = bucketize(whole.split(type.unit()), expenses.findAllInRange(whole.start(), whole.end()));
+        List<Bucket> buckets = bucketize(whole.split(type.unit()), expenses.findAllInRange(currentUser.id(), whole.start(), whole.end()));
         List<BigDecimal> totals = buckets.stream().map(Bucket::total).toList();
         BigDecimal average = divide(totals.stream().reduce(BigDecimal.ZERO, BigDecimal::add),
                 BigDecimal.valueOf(totals.size()));

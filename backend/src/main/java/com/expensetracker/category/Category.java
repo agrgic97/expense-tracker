@@ -13,7 +13,10 @@ public class Category {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 50)
+    @Column(name = "user_id")
+    private Long userId;
+
+    @Column(nullable = false, length = 50)
     private String name;
 
     @Column(nullable = false, length = 7)
@@ -22,13 +25,18 @@ public class Category {
     protected Category() {
     }
 
-    public Category(String name, String color) {
+    public Category(Long userId, String name, String color) {
+        this.userId = userId;
         this.name = name;
         this.color = color;
     }
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public String getName() {

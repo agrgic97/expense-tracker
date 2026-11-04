@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.expensetracker.auth.CurrentUser;
 import com.expensetracker.category.Category;
 import com.expensetracker.expense.Expense;
 import com.expensetracker.expense.ExpenseRepository;
@@ -22,6 +23,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 class StatsServiceTest {
 
     private static final LocalDate TODAY = LocalDate.of(2026, 11, 4);
+    private static final Long USER = 7L;
 
     private final ExpenseRepository repository = mock(ExpenseRepository.class);
     private StatsService service;
@@ -31,20 +33,22 @@ class StatsServiceTest {
     @BeforeEach
     void setUp() {
         Clock clock = Clock.fixed(TODAY.atStartOfDay().toInstant(ZoneOffset.UTC), ZoneOffset.UTC);
-        service = new StatsService(repository, clock);
+        CurrentUser currentUser = mock(CurrentUser.class);
+        when(currentUser.id()).thenReturn(USER);
+        service = new StatsService(repository, currentUser, clock);
         food = category(1L, "Lebensmittel");
         rent = category(2L, "Wohnen");
     }
 
     @Test
     void summarizesRunningMonth() {
-        when(repository.findAllInRange(LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 30))).thenReturn(List.of(
+        when(repository.findAllInRange(USER, LocalDate.of(2026, 11, 1), LocalDate.of(2026, 11, 30))).thenReturn(List.of(
                 expense("30.00", TODAY, food),
                 expense("10.00", TODAY.minusDays(1), food),
                 expense("800.00", LocalDate.of(2026, 11, 1), rent)));
-        when(repository.sumInRange(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31)))
+        when(repository.sumInRange(USER, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31)))
                 .thenReturn(new BigDecimal("1000.00"));
-        when(repository.sumInRange(LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 4)))
+        when(repository.sumInRange(USER, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 4)))
                 .thenReturn(new BigDecimal("700.00"));
 
         Summary summary = service.summary(PeriodType.MONTH, TODAY);
@@ -66,8 +70,8 @@ class StatsServiceTest {
 
     @Test
     void pastPeriodWithoutPreviousDataHasNoChange() {
-        when(repository.findAllInRange(any(), any())).thenReturn(List.of(expense("70.00", LocalDate.of(2025, 3, 3), food)));
-        when(repository.sumInRange(any(), any())).thenReturn(BigDecimal.ZERO);
+        when(repository.findAllInRange(eq(USER), any(), any())).thenReturn(List.of(expense("70.00", LocalDate.of(2025, 3, 3), food)));
+        when(repository.sumInRange(eq(USER), any(), any())).thenReturn(BigDecimal.ZERO);
 
         Summary summary = service.summary(PeriodType.WEEK, LocalDate.of(2025, 3, 5));
 
@@ -79,7 +83,7 @@ class StatsServiceTest {
 
     @Test
     void trendReturnsOneBucketPerPeriod() {
-        when(repository.findAllInRange(eq(LocalDate.of(2026, 9, 1)), eq(LocalDate.of(2026, 11, 30)))).thenReturn(List.of(
+        when(repository.findAllInRange(eq(USER), eq(LocalDate.of(2026, 9, 1)), eq(LocalDate.of(2026, 11, 30)))).thenReturn(List.of(
                 expense("100.00", LocalDate.of(2026, 9, 10), food),
                 expense("50.00", LocalDate.of(2026, 11, 2), food)));
 
@@ -93,12 +97,12 @@ class StatsServiceTest {
     }
 
     private static Category category(Long id, String name) {
-        Category category = new Category(name, "#000000");
+        Category category = new Category(USER, name, "#000000");
         ReflectionTestUtils.setField(category, "id", id);
         return category;
     }
 
     private static Expense expense(String amount, LocalDate date, Category category) {
-        return new Expense(new BigDecimal(amount), date, "Test", category);
+        return new Expense(USER, new BigDecimal(amount), date, "Test", category);
     }
 }

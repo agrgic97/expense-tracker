@@ -1,5 +1,6 @@
 package com.expensetracker.expense;
 
+import com.expensetracker.auth.CurrentUser;
 import com.expensetracker.category.Category;
 import com.expensetracker.category.CategoryService;
 import com.expensetracker.common.NotFoundException;
@@ -18,19 +19,21 @@ public class ExpenseService {
 
     private final ExpenseRepository expenses;
     private final CategoryService categories;
+    private final CurrentUser currentUser;
 
-    public ExpenseService(ExpenseRepository expenses, CategoryService categories) {
+    public ExpenseService(ExpenseRepository expenses, CategoryService categories, CurrentUser currentUser) {
         this.expenses = expenses;
         this.categories = categories;
+        this.currentUser = currentUser;
     }
 
     public PageResponse<ExpenseDto> search(ExpenseFilter filter, int page, int size) {
         var pageable = PageRequest.of(Math.max(page, 0), Math.clamp(size, 1, 200), NEWEST_FIRST);
-        return PageResponse.of(expenses.findAll(ExpenseSpecifications.matching(filter), pageable), ExpenseDto::of);
+        return PageResponse.of(expenses.findAll(ExpenseSpecifications.matching(currentUser.id(), filter), pageable), ExpenseDto::of);
     }
 
     public List<ExpenseDto> searchAll(ExpenseFilter filter) {
-        return expenses.findAll(ExpenseSpecifications.matching(filter), NEWEST_FIRST).stream()
+        return expenses.findAll(ExpenseSpecifications.matching(currentUser.id(), filter), NEWEST_FIRST).stream()
                 .map(ExpenseDto::of)
                 .toList();
     }
@@ -42,7 +45,7 @@ public class ExpenseService {
     @Transactional
     public ExpenseDto create(ExpenseRequest request) {
         Category category = categories.get(request.categoryId());
-        Expense expense = new Expense(request.amount(), request.date(), request.description().trim(), category);
+        Expense expense = new Expense(currentUser.id(), request.amount(), request.date(), request.description().trim(), category);
         return ExpenseDto.of(expenses.save(expense));
     }
 
@@ -62,7 +65,7 @@ public class ExpenseService {
     }
 
     private Expense find(Long id) {
-        return expenses.findById(id)
+        return expenses.findByIdAndUserId(id, currentUser.id())
                 .orElseThrow(() -> new NotFoundException("Ausgabe " + id + " nicht gefunden"));
     }
 }

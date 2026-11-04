@@ -68,6 +68,14 @@ async function remove(expense: Expense) {
   }
 }
 
+async function exportCsv() {
+  try {
+    await api.downloadExport(query.value)
+  } catch (e) {
+    error.value = (e as Error).message
+  }
+}
+
 function resetFilter() {
   Object.assign(filter, { q: '', categoryId: '', from: '', to: '' })
 }
@@ -78,7 +86,7 @@ function resetFilter() {
     <div class="page-header">
       <h1>Ausgaben</h1>
       <div class="row">
-        <a class="btn" :href="api.exportUrl(query)" download>⬇ CSV-Export</a>
+        <button @click="exportCsv">⬇ CSV-Export</button>
         <button class="primary" @click="openExpenseModal()">＋ Neue Ausgabe</button>
       </div>
     </div>

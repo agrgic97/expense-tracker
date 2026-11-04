@@ -1,6 +1,21 @@
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 import App from './App.vue'
+import { auth } from './lib/auth'
+import { closeExpenseModal } from './lib/expenseModal'
 import { router } from './router'
 import './style.css'
+
+// Leave protected pages as soon as the session ends (logout, expiry or a rejected token)
+watch(
+  () => auth.session,
+  (session) => {
+    if (session) return
+    closeExpenseModal(false)
+    const route = router.currentRoute.value
+    if (!route.meta.public) {
+      router.replace({ name: 'login', query: route.fullPath === '/' ? {} : { redirect: route.fullPath } })
+    }
+  },
+)
 
 createApp(App).use(router).mount('#app')

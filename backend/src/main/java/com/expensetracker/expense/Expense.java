@@ -20,6 +20,9 @@ public class Expense {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id")
+    private Long userId;
+
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal amount;
 
@@ -39,7 +42,8 @@ public class Expense {
     protected Expense() {
     }
 
-    public Expense(BigDecimal amount, LocalDate date, String description, Category category) {
+    public Expense(Long userId, BigDecimal amount, LocalDate date, String description, Category category) {
+        this.userId = userId;
         this.amount = amount;
         this.date = date;
         this.description = description;
@@ -48,6 +52,10 @@ public class Expense {
 
     public Long getId() {
         return id;
+    }
+
+    public Long getUserId() {
+        return userId;
     }
 
     public BigDecimal getAmount() {

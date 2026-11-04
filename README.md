@@ -2,10 +2,11 @@
 
 Webapp zum Erfassen von Ausgaben mit Statistiken für Wochen, Monate und Jahre.
 
-**Stack:** Vue 3 + TypeScript + Vite + Chart.js · Spring Boot 3.5 (Java 21) + JPA + Flyway · PostgreSQL 17 · Docker Compose
+**Stack:** Vue 3 + TypeScript + Vite + Chart.js · Spring Boot 3.5 (Java 21) + Spring Security + JPA + Flyway · PostgreSQL 17 · Docker Compose
 
 ## Features
 
+- Anmeldung mit Benutzername und Passwort (JWT), jeder Benutzer sieht nur seine eigenen Daten
 - Ausgaben erfassen, bearbeiten, löschen – mit Suche, Kategorie- und Datumsfilter, Paginierung und CSV-Export
 - Eigene Kategorien mit Farben (9 Standardkategorien werden beim ersten Start angelegt)
 - Dashboard pro **Woche / Monat / Jahr** (vor- und zurückblättern):
@@ -22,6 +23,15 @@ docker compose up -d --build
 ```
 
 App: http://localhost:8080 (Port über `APP_PORT` änderbar). Die Daten liegen im Volume `db-data`.
+
+## Authentifizierung
+
+- `POST /api/auth/register` bzw. `POST /api/auth/login` mit `{ "username", "password" }` liefern `{ token, expiresAt, username }`.
+- Alle anderen `/api`-Endpunkte erwarten `Authorization: Bearer <token>`. Das Token ist ein HS256-signiertes JWT (Subject = Benutzer-ID).
+- Passwörter werden mit BCrypt gehasht. Es gibt kein Refresh-Token: Nach Ablauf (`JWT_EXPIRATION`, Standard 7 Tage) meldet man sich neu an.
+- **Erster Benutzer:** Wer sich als Erstes registriert, übernimmt alle Ausgaben und Kategorien, die vor Einführung der Anmeldung angelegt wurden. Jeder weitere Benutzer startet mit den Standardkategorien.
+- `JWT_SECRET` in `.env` setzen (mind. 32 Zeichen, z. B. `openssl rand -base64 48`). Ohne ihn wird bei jedem Start ein zufälliger Schlüssel erzeugt, dann sind nach einem Neustart alle abgemeldet.
+- Nachdem alle Konten angelegt sind, kann die Registrierung mit `REGISTRATION_ENABLED=false` abgeschaltet werden.
 
 ## Lokale Entwicklung
 
@@ -45,6 +55,9 @@ Browser ──> nginx (frontend, :80)
 
 | Methode | Pfad | Beschreibung |
 |---|---|---|
+| GET | `/api/auth/config` | Ob die Registrierung offen ist (öffentlich) |
+| POST | `/api/auth/register`, `/api/auth/login` | Konto anlegen bzw. anmelden → JWT (öffentlich) |
+| GET | `/api/auth/me` | Angemeldeter Benutzer |
 | GET | `/api/expenses?from&to&categoryId&q&page&size` | Ausgaben (paginiert, neueste zuerst) |
 | GET | `/api/expenses/export?…` | CSV-Export mit denselben Filtern |
 | POST/PUT/DELETE | `/api/expenses[/{id}]` | Ausgabe anlegen/ändern/löschen |

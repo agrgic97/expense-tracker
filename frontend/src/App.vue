@@ -1,6 +1,10 @@
 <script setup lang="ts">
+import { useRoute } from 'vue-router'
 import ExpenseDialog from './components/ExpenseDialog.vue'
+import { auth, clearSession } from './lib/auth'
 import { expenseModal, openExpenseModal } from './lib/expenseModal'
+
+const route = useRoute()
 
 const links = [
   { to: '/', label: 'Übersicht', icon: '📊' },
@@ -10,7 +14,8 @@ const links = [
 </script>
 
 <template>
-  <div class="layout">
+  <RouterView v-if="route.meta.public" />
+  <div v-else class="layout">
     <aside class="sidebar">
       <div class="brand">💶 <span>Ausgaben</span></div>
       <nav>
@@ -19,6 +24,10 @@ const links = [
         </RouterLink>
       </nav>
       <button class="primary add" @click="openExpenseModal()">＋ <span class="label">Neue Ausgabe</span></button>
+      <div class="account">
+        <span class="user label" :title="auth.session?.username">👤 {{ auth.session?.username }}</span>
+        <button class="ghost" title="Abmelden" @click="clearSession">⎋ <span class="label">Abmelden</span></button>
+      </div>
     </aside>
     <main class="content">
       <RouterView />
@@ -62,6 +71,17 @@ nav { display: flex; flex-direction: column; gap: 4px; }
 
 .add { justify-content: center; }
 
+.account {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 4px 0 10px;
+  border-top: 1px solid var(--border);
+}
+.user { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 0.9rem; }
+
 .content { flex: 1; min-width: 0; padding: 28px 32px 48px; max-width: 1280px; }
 
 @media (max-width: 760px) {
@@ -81,6 +101,7 @@ nav { display: flex; flex-direction: column; gap: 4px; }
   .brand span, .label { display: none; }
   .brand { padding: 0; }
   nav { flex-direction: row; flex: 1; }
+  .account { margin-top: 0; padding: 0; border-top: none; }
   .content { padding: 20px 16px 40px; }
 }
 </style>

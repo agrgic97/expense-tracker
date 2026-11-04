@@ -1,3 +1,5 @@
+import { clearSession, currentToken, type Session } from './auth'
+
 export type PeriodType = 'WEEK' | 'MONTH' | 'YEAR'
 
 export interface Category {
@@ -89,11 +91,28 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export interface Credentials {
+  username: string
+  password: string
+}
+
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  const token = currentToken()
   const response = await fetch(`/api${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...init?.headers,
+    },
   })
+  // An invalid or expired token ends the session; login failures are handled by the login form
+  if (response.status === 401 && !path.startsWith('/auth/')) clearSession()
+  return response
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await send(path, init)
   if (!response.ok) {
     let message = `Fehler ${response.status}`
     try {
@@ -117,6 +136,10 @@ export function queryString(params: object): string {
 }
 
 export const api = {
+  authConfig: () => request<{ registrationEnabled: boolean }>('/auth/config'),
+  login: (body: Credentials) => request<Session>('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  register: (body: Credentials) => request<Session>('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
+
   categories: () => request<Category[]>('/categories'),
   createCategory: (body: Pick<Category, 'name' | 'color'>) =>
     request<Category>('/categories', { method: 'POST', body: JSON.stringify(body) }),
@@ -130,7 +153,15 @@ export const api = {
   updateExpense: (id: number, body: ExpenseInput) =>
     request<Expense>(`/expenses/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
   deleteExpense: (id: number) => request<void>(`/expenses/${id}`, { method: 'DELETE' }),
-  exportUrl: (query: ExpenseQuery) => `/api/expenses/export${queryString({ ...query, page: undefined, size: undefined })}`,
+  /** Downloads the CSV export; done via fetch because a plain link cannot send the bearer token. */
+  async downloadExport(query: ExpenseQuery) {
+    const response = await send(`/expenses/export${queryString({ ...query, page: undefined, size: undefined })}`)
+    if (!response.ok) throw new ApiError(`Export fehlgeschlagen (${response.status})`, response.status)
+    const url = URL.createObjectURL(await response.blob())
+    const link = Object.assign(document.createElement('a'), { href: url, download: 'ausgaben.csv' })
+    link.click()
+    URL.revokeObjectURL(url)
+  },
 
   summary: (period: PeriodType, date: string) => request<Summary>(`/stats/summary${queryString({ period, date })}`),
   trend: (period: PeriodType, date: string, count = 12) =>
