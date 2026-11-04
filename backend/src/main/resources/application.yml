@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: expense-tracker
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/expenses}
+    username: ${DB_USER:expenses}
+    password: ${DB_PASSWORD:expenses}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  mvc:
+    problemdetails:
+      enabled: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: 8080
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
