@@ -1,0 +1,25 @@
+www.{$DOMAIN} {
+	redir https://{$DOMAIN}{uri} permanent
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# API straight to Spring Boot: Caddy sets X-Forwarded-For to the real client IP for the login rate limit
+	handle /api/* {
+		reverse_proxy backend:8080
+	}
+
+	# Everything else is the Vue app (actuator endpoints are therefore not reachable from outside)
+	handle {
+		reverse_proxy frontend:80
+	}
+}

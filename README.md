@@ -45,6 +45,10 @@ App: http://localhost:8080 (Port über `APP_PORT` änderbar). Die Daten liegen i
 - **Erster Benutzer:** Wer sich als Erstes registriert, übernimmt alle Daten, die vor Einführung der Anmeldung angelegt wurden. Jeder weitere Benutzer startet mit den Standardkategorien.
 - **`JWT_SECRET`** in `.env` setzen (mind. 32 Zeichen, z. B. `openssl rand -base64 48`). Mit `REGISTRATION_ENABLED=false` lässt sich die Registrierung abschalten.
 
+## Produktion
+
+Anleitung für den STRATO-VPS mit HTTPS über Caddy, Deploy- und Backup-Skript: [deploy/README.md](deploy/README.md)
+
 ## Lokale Entwicklung
 
 ```bash

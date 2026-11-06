@@ -1,0 +1,77 @@
+# Production stack. Lives as compose.yaml in /opt/expense-tracker on the server next to .env, Caddyfile and backup.sh.
+# Images are built on the developer machine and transferred by deploy.sh, so nothing is built on the server.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?DOMAIN fehlt in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    mem_limit: 128m
+    logging: *logging
+
+  frontend:
+    image: expense-tracker-frontend:latest
+    restart: unless-stopped
+    mem_limit: 64m
+    logging: *logging
+
+  backend:
+    image: expense-tracker-backend:latest
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-expenses}
+      DB_USER: ${POSTGRES_USER:-expenses}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}
+      TZ: ${TZ:-Europe/Berlin}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET fehlt in .env}
+      ACCESS_TOKEN_VALIDITY: ${ACCESS_TOKEN_VALIDITY:-15m}
+      REFRESH_TOKEN_VALIDITY: ${REFRESH_TOKEN_VALIDITY:-30d}
+      COOKIE_SECURE: "true"
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 768m
+    logging: *logging
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-expenses}
+      POSTGRES_USER: ${POSTGRES_USER:-expenses}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    mem_limit: 512m
+    logging: *logging
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:
