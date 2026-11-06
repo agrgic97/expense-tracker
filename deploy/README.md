@@ -145,6 +145,45 @@ rsync -av deploy@SERVER_IP:/opt/expense-tracker/backups/ ~/Backups/expense-track
 
 Wiederherstellen: wie Schritt 5, nur mit einer Datei aus `backups/`.
 
+## 7. Automatisches Deployment mit GitHub Actions
+
+Die Pipeline `.github/workflows/ci-cd.yml` läuft bei jedem Push und Pull Request:
+
+| Job | Wann | Was |
+|---|---|---|
+| Backend | immer | `mvn verify` (alle Tests) |
+| Frontend | immer | `npm ci`, Typecheck und Build |
+| Deploy | nur Push auf `main`, wenn beide grün sind | `deploy/deploy.sh` vom GitHub-Runner aus |
+
+Solange die Variable `DEPLOY_HOST` fehlt, wird der Deploy-Job übersprungen (CI läuft trotzdem). Einrichtung einmalig:
+
+**a) Eigenen SSH-Schlüssel nur für GitHub erzeugen** (vom Mac; nicht deinen persönlichen Schlüssel verwenden):
+
+```bash
+ssh-keygen -t ed25519 -N "" -C github-actions -f ~/.ssh/expense-tracker-ci
+ssh-copy-id -i ~/.ssh/expense-tracker-ci.pub deploy@SERVER_IP
+ssh-keygen -F SERVER_IP | grep -v '^#'     # Host-Key des Servers, für SSH_KNOWN_HOSTS
+```
+
+Der letzte Befehl liest den Host-Key aus deiner `known_hosts`, den du beim ersten Login bestätigt hast. So kann GitHub keinem untergeschobenen Server die Images schicken.
+
+**b) In GitHub eintragen** (Repository → Settings):
+
+| Wo | Name | Wert |
+|---|---|---|
+| Environments → `production` anlegen → Environment secrets | `SSH_PRIVATE_KEY` | Inhalt von `~/.ssh/expense-tracker-ci` (die Datei **ohne** `.pub`) |
+| Environments → `production` → Environment secrets | `SSH_KNOWN_HOSTS` | Ausgabe von `ssh-keygen -F` oben |
+| Secrets and variables → Actions → **Variables** (Repository) | `DEPLOY_HOST` | `SERVER_IP` (dieselbe Adresse wie bei `ssh-keygen -F`) |
+| Secrets and variables → Actions → **Variables** (Repository) | `DEPLOY_USER` | `deploy` |
+
+Die beiden Variablen müssen Repository-Variablen sein, keine Environment-Variablen, weil der Workflow sie schon vor dem Start des Jobs prüft.
+
+**c) Empfohlen:** Im Environment `production` unter „Deployment branches“ nur `main` erlauben. Wer will, setzt dort zusätzlich „Required reviewers“ auf sich selbst, dann wartet jedes Deployment auf einen Klick.
+
+Danach: Push auf `main` → Tests → Deployment. Manuell auslösen geht unter Actions → CI/CD → „Run workflow“. `deploy.sh` vom Mac funktioniert weiterhin.
+
+Hinweis: Der Schlüssel darf Docker auf dem Server steuern und hat damit praktisch Root-Rechte. Wird er kompromittiert, entferne seine Zeile (`github-actions`) aus `/home/deploy/.ssh/authorized_keys`.
+
 ## Nützliche Befehle (auf dem Server in `/opt/expense-tracker`)
 
 | Zweck | Befehl |
