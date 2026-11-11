@@ -1,18 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../lib/api'
 
 const route = useRoute()
 const router = useRouter()
 
-const mode = ref<'login' | 'register'>('login')
 const registrationEnabled = ref(false)
+const configLoaded = ref(false)
 const form = reactive({ username: '', password: '', confirm: '' })
 const error = ref('')
 const busy = ref(false)
 
-const isRegister = computed(() => mode.value === 'register')
+const isRegister = computed(() => route.name === 'register')
+const registrationClosed = computed(() => isRegister.value && configLoaded.value && !registrationEnabled.value)
+// Keep ?redirect=… when switching between login and registration
+const otherPage = computed(() => ({ name: isRegister.value ? 'login' : 'register', query: route.query }))
 const mismatch = computed(() => isRegister.value && form.confirm !== '' && form.password !== form.confirm)
 const valid = computed(() => {
   if (!form.username.trim() || !form.password) return false
@@ -25,17 +28,19 @@ onMounted(async () => {
     registrationEnabled.value = (await api.authConfig()).registrationEnabled
   } catch {
     registrationEnabled.value = false
+  } finally {
+    configLoaded.value = true
   }
 })
 
-function switchMode() {
-  mode.value = isRegister.value ? 'login' : 'register'
+// Both routes share this component instance, so reset the page-specific state on switch
+watch(isRegister, () => {
   error.value = ''
   form.confirm = ''
-}
+})
 
 async function submit() {
-  if (!valid.value) return
+  if (!valid.value || registrationClosed.value) return
   busy.value = true
   error.value = ''
   try {
@@ -75,17 +80,18 @@ async function submit() {
         <span v-if="mismatch" class="small mismatch">Passwörter stimmen nicht überein</span>
       </label>
 
-      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="registrationClosed" class="error">Die Registrierung ist derzeit deaktiviert.</p>
+      <p v-else-if="error" class="error">{{ error }}</p>
 
-      <button type="submit" class="primary submit" :disabled="!valid || busy">
+      <button type="submit" class="primary submit" :disabled="!valid || busy || registrationClosed">
         {{ busy ? 'Bitte warten…' : isRegister ? 'Registrieren' : 'Anmelden' }}
       </button>
 
       <p v-if="registrationEnabled || isRegister" class="small muted switch">
         {{ isRegister ? 'Schon ein Konto?' : 'Noch kein Konto?' }}
-        <button type="button" class="link" @click="switchMode">
+        <RouterLink :to="otherPage" class="link">
           {{ isRegister ? 'Anmelden' : 'Registrieren' }}
-        </button>
+        </RouterLink>
       </p>
     </form>
   </div>
@@ -100,6 +106,6 @@ async function submit() {
 .submit { justify-content: center; padding: 10px; margin-top: 4px; }
 .switch { margin: 0; text-align: center; }
 .mismatch { color: var(--danger); }
-.link { border: none; background: none; padding: 0; color: var(--accent); font-weight: 600; }
-.link:hover { background: none; text-decoration: underline; }
+.link { color: var(--accent); font-weight: 600; text-decoration: none; }
+.link:hover { text-decoration: underline; }
 </style>
