@@ -2,6 +2,7 @@ package com.expensetracker.stats;
 
 import com.expensetracker.auth.CurrentUser;
 import com.expensetracker.category.Category;
+import com.expensetracker.category.CategoryKind;
 import com.expensetracker.expense.Expense;
 import com.expensetracker.expense.ExpenseDto;
 import com.expensetracker.expense.ExpenseRepository;
@@ -43,7 +44,9 @@ public class StatsService {
         LocalDate today = LocalDate.now(clock);
         DateRange range = DateRange.of(type, date);
         boolean current = range.contains(today);
-        List<Expense> items = expenses.findAllInRange(userId, range.start(), range.end());
+        List<Expense> all = expenses.findAllInRange(userId, range.start(), range.end());
+        List<Expense> items = all.stream().filter(e -> !e.isIncome()).toList();
+        BigDecimal incomeTotal = sum(all.stream().filter(Expense::isIncome).toList());
 
         BigDecimal total = sum(items);
         long count = items.size();
@@ -57,7 +60,7 @@ public class StatsService {
                 : null;
 
         DateRange previous = DateRange.of(type, range.start().minusDays(1));
-        BigDecimal previousTotal = expenses.sumInRange(userId, previous.start(), previous.end());
+        BigDecimal previousTotal = expenses.sumInRange(userId, CategoryKind.EXPENSE, previous.start(), previous.end());
         // Compare a running period against the same stretch of the previous one (e.g. 1.-4. Nov vs. 1.-4. Okt).
         BigDecimal previousComparableTotal = previousTotal;
         if (current) {
@@ -65,16 +68,21 @@ public class StatsService {
             if (comparableEnd.isAfter(previous.end())) {
                 comparableEnd = previous.end();
             }
-            previousComparableTotal = expenses.sumInRange(userId, previous.start(), comparableEnd);
+            previousComparableTotal = expenses.sumInRange(userId, CategoryKind.EXPENSE, previous.start(), comparableEnd);
         }
         BigDecimal changePercent = previousComparableTotal.signum() == 0 ? null
                 : total.subtract(previousComparableTotal)
                         .multiply(HUNDRED)
                         .divide(previousComparableTotal, 1, RoundingMode.HALF_UP);
 
+        BigDecimal balance = incomeTotal.subtract(total);
+        BigDecimal savingsRate = incomeTotal.signum() == 0 ? null
+                : balance.multiply(HUNDRED).divide(incomeTotal, 1, RoundingMode.HALF_UP);
+
         return new Summary(type, range.start(), range.end(), current, total, count, averagePerDay,
                 averagePerExpense, projectedTotal, scaled(previousTotal), scaled(previousComparableTotal),
-                changePercent, byCategory(items, total), breakdown(range, type, items), topExpenses(items));
+                changePercent, byCategory(items, total), breakdown(range, type, all), topExpenses(items),
+                incomeTotal, balance, savingsRate);
     }
 
     public Trend trend(PeriodType type, LocalDate date, int count) {
@@ -116,8 +124,13 @@ public class StatsService {
     private List<Bucket> bucketize(List<DateRange> ranges, List<Expense> items) {
         return ranges.stream()
                 .map(r -> {
-                    List<Expense> inRange = items.stream().filter(e -> r.contains(e.getDate())).toList();
-                    return new Bucket(r.start(), r.end(), sum(inRange), inRange.size());
+                    List<Expense> inRange = items.stream()
+                            .filter(e -> !e.isIncome() && r.contains(e.getDate()))
+                            .toList();
+                    BigDecimal income = sum(items.stream()
+                            .filter(e -> e.isIncome() && r.contains(e.getDate()))
+                            .toList());
+                    return new Bucket(r.start(), r.end(), sum(inRange), inRange.size(), income);
                 })
                 .toList();
     }

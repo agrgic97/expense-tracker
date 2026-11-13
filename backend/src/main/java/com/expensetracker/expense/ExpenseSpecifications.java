@@ -24,6 +24,9 @@ final class ExpenseSpecifications {
             if (filter.categoryId() != null) {
                 predicates.add(cb.equal(root.get("category").get("id"), filter.categoryId()));
             }
+            if (filter.kind() != null) {
+                predicates.add(cb.equal(root.get("category").get("kind"), filter.kind()));
+            }
             if (filter.q() != null && !filter.q().isBlank()) {
                 predicates.add(cb.like(cb.lower(root.get("description")),
                         "%" + filter.q().trim().toLowerCase() + "%"));

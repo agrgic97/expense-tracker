@@ -19,6 +19,9 @@ spring:
       write-dates-as-timestamps: false
 
 app:
+  recurring:
+    # Daily job that books due recurring entries (server time zone)
+    cron: "0 5 0 * * *"
   auth:
     # HMAC key for signing JWTs (min. 32 characters). If empty, a random key is generated at startup.
     jwt-secret: ${JWT_SECRET:}

@@ -1,5 +1,6 @@
 package com.expensetracker.expense;
 
+import com.expensetracker.category.CategoryKind;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -26,8 +27,21 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long>, JpaSpec
                                  @Param("to") LocalDate to);
 
     @Query("select coalesce(sum(e.amount), 0) from Expense e "
-            + "where e.userId = :userId and e.date between :from and :to")
-    BigDecimal sumInRange(@Param("userId") Long userId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+            + "where e.userId = :userId and e.category.kind = :kind and e.date between :from and :to")
+    BigDecimal sumInRange(@Param("userId") Long userId, @Param("kind") CategoryKind kind,
+                          @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /** Expense totals per category in a date range, as [categoryId, sum] rows. */
+    @Query("select e.category.id, sum(e.amount) from Expense e "
+            + "where e.userId = :userId and e.category.kind = com.expensetracker.category.CategoryKind.EXPENSE "
+            + "and e.date between :from and :to group by e.category.id")
+    List<Object[]> sumByCategoryInRange(@Param("userId") Long userId, @Param("from") LocalDate from,
+                                        @Param("to") LocalDate to);
+
+    @EntityGraph(attributePaths = "category")
+    List<Expense> findByUserIdAndDescriptionContainingIgnoreCase(Long userId, String text);
+
+    List<Expense> findByUserIdAndDateBetween(Long userId, LocalDate from, LocalDate to);
 
     /** Assigns expenses created before authentication existed to the given user. */
     @Modifying
