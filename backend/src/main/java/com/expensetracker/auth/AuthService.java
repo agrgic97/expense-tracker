@@ -33,19 +33,22 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final TokenService tokens;
     private final RefreshTokenService refreshTokens;
+    private final PasswordResetTokenRepository resetTokens;
     private final LoginRateLimiter rateLimiter;
     private final CategoryService categories;
     private final AuthProperties properties;
 
     public AuthService(AppUserRepository users, PasswordEncoder passwordEncoder,
                        AuthenticationManager authenticationManager, TokenService tokens,
-                       RefreshTokenService refreshTokens, LoginRateLimiter rateLimiter,
+                       RefreshTokenService refreshTokens, PasswordResetTokenRepository resetTokens,
+                       LoginRateLimiter rateLimiter,
                        CategoryService categories, AuthProperties properties) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
         this.tokens = tokens;
         this.refreshTokens = refreshTokens;
+        this.resetTokens = resetTokens;
         this.rateLimiter = rateLimiter;
         this.categories = categories;
         this.properties = properties;
@@ -113,6 +116,10 @@ public class AuthService {
         AppUser user = find(userId);
         String normalized = normalizeEmail(email);
         ensureEmailAvailable(normalized, userId);
+        if (!sameEmail(normalized, user.getEmail())) {
+            // A link already mailed to the old address must not work once the address is replaced
+            resetTokens.deleteAllOfUser(userId);
+        }
         user.setEmail(normalized);
         return new AccountResponse(user.getUsername(), user.getEmail(), user.getCreatedAt());
     }
@@ -131,7 +138,13 @@ public class AuthService {
         }
         user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         refreshTokens.revokeAll(userId);
+        // A reset link requested earlier would otherwise still overwrite the new password
+        resetTokens.deleteAllOfUser(userId);
         return startSession(user);
+    }
+
+    private static boolean sameEmail(String a, String b) {
+        return a == null ? b == null : a.equalsIgnoreCase(b);
     }
 
     static String normalizeEmail(String email) {
