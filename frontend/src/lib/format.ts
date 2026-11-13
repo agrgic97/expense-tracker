@@ -10,6 +10,22 @@ const monthYearShort = new Intl.DateTimeFormat('de-DE', { month: 'short', year: 
 
 export const money = (value: number) => currency.format(value)
 
+/** Amount with sign: income positive, expenses negative. */
+export const signedMoney = (value: number, income: boolean) => `${income ? '+' : '−'}${currency.format(value)}`
+
+/** Accepts "1.234,56", "12,50", "12.50" and "-3,99"; NaN if the text is not a number. */
+export function parseAmount(text: string): number {
+  const raw = text.trim().replace(/\s|€/g, '')
+  if (!/^[+-]?[\d.,]+$/.test(raw)) return NaN
+  const lastComma = raw.lastIndexOf(',')
+  const lastDot = raw.lastIndexOf('.')
+  // The separator further right is the decimal separator; the other one groups thousands
+  const normalized = lastComma > lastDot
+    ? raw.replace(/\./g, '').replace(',', '.')
+    : raw.replace(/,/g, '')
+  return Number(normalized)
+}
+
 /** Parses an ISO date (yyyy-mm-dd) as a local date, avoiding UTC shifts. */
 export function parseDate(iso: string): Date {
   const [y, m, d] = iso.split('-').map(Number)
@@ -69,6 +85,13 @@ export function trendLabel(period: PeriodType, start: string): string {
   if (period === 'WEEK') return `KW ${isoWeek(d)}`
   if (period === 'MONTH') return monthYearShort.format(d)
   return String(d.getFullYear())
+}
+
+export const recurrenceNames: Record<string, string> = {
+  WEEKLY: 'Wöchentlich',
+  MONTHLY: 'Monatlich',
+  QUARTERLY: 'Vierteljährlich',
+  YEARLY: 'Jährlich',
 }
 
 export const periodNames: Record<PeriodType, { label: string; plural: string; previous: string }> = {

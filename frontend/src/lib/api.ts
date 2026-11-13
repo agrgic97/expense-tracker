@@ -1,14 +1,22 @@
 import { clearUser, setUser, type User } from './auth'
 
 export type PeriodType = 'WEEK' | 'MONTH' | 'YEAR'
+export type CategoryKind = 'EXPENSE' | 'INCOME'
+export type Recurrence = 'WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'YEARLY'
 
 export interface Category {
   id: number
   name: string
   color: string
+  kind: CategoryKind
+  monthlyBudget: number | null
+  /** Number of entries (expenses or income) in this category */
   expenseCount: number
 }
 
+export type CategoryInput = Pick<Category, 'name' | 'color' | 'kind'>
+
+/** An entry: an expense or, if its category is an income category, an income. */
 export interface Expense {
   id: number
   amount: number
@@ -17,6 +25,8 @@ export interface Expense {
   categoryId: number
   categoryName: string
   categoryColor: string
+  kind: CategoryKind
+  recurringId: number | null
 }
 
 export interface ExpenseInput {
@@ -34,11 +44,13 @@ export interface Page<T> {
   totalPages: number
 }
 
+/** total and count cover expenses, income the income in the same range */
 export interface Bucket {
   start: string
   end: string
   total: number
   count: number
+  income: number
 }
 
 export interface CategoryTotal {
@@ -66,6 +78,9 @@ export interface Summary {
   byCategory: CategoryTotal[]
   breakdown: Bucket[]
   topExpenses: Expense[]
+  incomeTotal: number
+  balance: number
+  savingsRatePercent: number | null
 }
 
 export interface Trend {
@@ -81,8 +96,87 @@ export interface ExpenseQuery {
   to?: string
   categoryId?: number
   q?: string
+  kind?: CategoryKind
   page?: number
   size?: number
+}
+
+export interface BudgetStatus {
+  categoryId: number
+  name: string
+  color: string
+  budget: number | null
+  spent: number
+  percent: number | null
+  remaining: number | null
+}
+
+export interface BudgetOverview {
+  start: string
+  end: string
+  /** How much of the month has passed (0–100) */
+  elapsedPercent: number
+  totalBudget: number
+  totalSpent: number
+  categories: BudgetStatus[]
+}
+
+export interface RecurringExpense {
+  id: number
+  amount: number
+  description: string
+  categoryId: number
+  categoryName: string
+  categoryColor: string
+  kind: CategoryKind
+  recurrence: Recurrence
+  startDate: string
+  endDate: string | null
+  active: boolean
+  nextDate: string | null
+  lastGeneratedDate: string | null
+}
+
+export interface RecurringExpenseInput {
+  amount: number
+  description: string
+  categoryId: number
+  recurrence: Recurrence
+  startDate: string
+  endDate: string | null
+  active: boolean
+}
+
+export interface CategoryRule {
+  id: number
+  pattern: string
+  categoryId: number
+  categoryName: string
+  categoryColor: string
+  kind: CategoryKind
+}
+
+/** A bank statement row: negative amounts are expenses, positive ones income */
+export interface StatementRow {
+  date: string
+  amount: number
+  description: string
+}
+
+export interface ImportPreviewRow {
+  categoryId: number | null
+  duplicate: boolean
+}
+
+export interface Account {
+  username: string
+  email: string | null
+  createdAt: string
+}
+
+export interface AuthConfig {
+  registrationEnabled: boolean
+  passwordResetEnabled: boolean
 }
 
 export class ApiError extends Error {
@@ -96,9 +190,16 @@ export interface Credentials {
   password: string
 }
 
+export interface Registration extends Credentials {
+  email: string | null
+}
+
 const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS']
 // Endpoints whose 401 means "wrong credentials" or "no session" rather than "access token expired"
-const NO_REFRESH = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/logout']
+const NO_REFRESH = [
+  '/auth/login', '/auth/register', '/auth/refresh', '/auth/logout',
+  '/auth/password-reset/request', '/auth/password-reset/confirm',
+]
 
 function readCookie(name: string): string | null {
   const match = document.cookie.split('; ').find((c) => c.startsWith(`${name}=`))
@@ -168,11 +269,11 @@ export function queryString(params: object): string {
 }
 
 export const api = {
-  authConfig: () => request<{ registrationEnabled: boolean }>('/auth/config'),
+  authConfig: () => request<AuthConfig>('/auth/config'),
   async login(body: Credentials) {
     setUser(await request<User>('/auth/login', { method: 'POST', body: JSON.stringify(body) }))
   },
-  async register(body: Credentials) {
+  async register(body: Registration) {
     setUser(await request<User>('/auth/register', { method: 'POST', body: JSON.stringify(body) }))
   },
   async logout() {
@@ -182,6 +283,17 @@ export const api = {
       clearUser()
     }
   },
+  requestPasswordReset: (email: string) =>
+    request<void>('/auth/password-reset/request', { method: 'POST', body: JSON.stringify({ email }) }),
+  confirmPasswordReset: (token: string, password: string) =>
+    request<void>('/auth/password-reset/confirm', { method: 'POST', body: JSON.stringify({ token, password }) }),
+
+  account: () => request<Account>('/account'),
+  changeEmail: (email: string | null) =>
+    request<Account>('/account/email', { method: 'PUT', body: JSON.stringify({ email }) }),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    request<User>('/account/password', { method: 'PUT', body: JSON.stringify({ currentPassword, newPassword }) }),
+
   /** Checks for an existing session (refreshing it if needed) after a page load. */
   async restoreSession() {
     try {
@@ -192,11 +304,37 @@ export const api = {
   },
 
   categories: () => request<Category[]>('/categories'),
-  createCategory: (body: Pick<Category, 'name' | 'color'>) =>
+  createCategory: (body: CategoryInput) =>
     request<Category>('/categories', { method: 'POST', body: JSON.stringify(body) }),
-  updateCategory: (id: number, body: Pick<Category, 'name' | 'color'>) =>
+  updateCategory: (id: number, body: CategoryInput) =>
     request<Category>(`/categories/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  setBudget: (id: number, monthlyBudget: number | null) =>
+    request<Category>(`/categories/${id}/budget`, { method: 'PUT', body: JSON.stringify({ monthlyBudget }) }),
   deleteCategory: (id: number) => request<void>(`/categories/${id}`, { method: 'DELETE' }),
+
+  budgets: (date: string) => request<BudgetOverview>(`/budgets${queryString({ date })}`),
+
+  recurring: () => request<RecurringExpense[]>('/recurring'),
+  createRecurring: (body: RecurringExpenseInput) =>
+    request<RecurringExpense>('/recurring', { method: 'POST', body: JSON.stringify(body) }),
+  updateRecurring: (id: number, body: RecurringExpenseInput) =>
+    request<RecurringExpense>(`/recurring/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteRecurring: (id: number) => request<void>(`/recurring/${id}`, { method: 'DELETE' }),
+
+  rules: () => request<CategoryRule[]>('/rules'),
+  createRule: (body: { pattern: string; categoryId: number }) =>
+    request<CategoryRule>('/rules', { method: 'POST', body: JSON.stringify(body) }),
+  updateRule: (id: number, body: { pattern: string; categoryId: number }) =>
+    request<CategoryRule>(`/rules/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteRule: (id: number) => request<void>(`/rules/${id}`, { method: 'DELETE' }),
+  applyRule: (id: number) => request<{ updated: number }>(`/rules/${id}/apply`, { method: 'POST' }),
+  suggestCategory: (description: string, kind: CategoryKind) =>
+    request<{ categoryId: number | null }>(`/rules/suggest${queryString({ description, kind })}`),
+
+  importPreview: (rows: StatementRow[]) =>
+    request<{ rows: ImportPreviewRow[] }>('/import/preview', { method: 'POST', body: JSON.stringify({ rows }) }),
+  importRows: (rows: ExpenseInput[]) =>
+    request<{ imported: number }>('/import', { method: 'POST', body: JSON.stringify({ rows }) }),
 
   expenses: (query: ExpenseQuery) => request<Page<Expense>>(`/expenses${queryString(query)}`),
   createExpense: (body: ExpenseInput) =>
@@ -209,7 +347,7 @@ export const api = {
     const response = await send(`/expenses/export${queryString({ ...query, page: undefined, size: undefined })}`)
     if (!response.ok) throw new ApiError(`Export fehlgeschlagen (${response.status})`, response.status)
     const url = URL.createObjectURL(await response.blob())
-    const link = Object.assign(document.createElement('a'), { href: url, download: 'ausgaben.csv' })
+    const link = Object.assign(document.createElement('a'), { href: url, download: 'buchungen.csv' })
     link.click()
     URL.revokeObjectURL(url)
   },

@@ -9,7 +9,9 @@ const route = useRoute()
 
 const links = [
   { to: '/', label: 'Übersicht', icon: '📊' },
-  { to: '/expenses', label: 'Ausgaben', icon: '🧾' },
+  { to: '/expenses', label: 'Buchungen', icon: '🧾' },
+  { to: '/budgets', label: 'Budgets', icon: '🎯' },
+  { to: '/recurring', label: 'Wiederkehrend', icon: '🔁' },
   { to: '/categories', label: 'Kategorien', icon: '🏷️' },
 ]
 </script>
@@ -24,9 +26,11 @@ const links = [
           <span class="icon">{{ link.icon }}</span><span class="label">{{ link.label }}</span>
         </RouterLink>
       </nav>
-      <button class="primary add" @click="openExpenseModal()">＋ <span class="label">Neue Ausgabe</span></button>
+      <button class="primary add" title="Neue Ausgabe" @click="openExpenseModal()">＋ <span class="label">Neue Ausgabe</span></button>
       <div class="account">
-        <span class="user label" :title="auth.user?.username">👤 {{ auth.user?.username }}</span>
+        <RouterLink to="/account" class="user" :title="`Konto: ${auth.user?.username}`">
+          👤 <span class="label">{{ auth.user?.username }}</span>
+        </RouterLink>
         <button class="ghost" title="Abmelden" @click="api.logout()">⎋ <span class="label">Abmelden</span></button>
       </div>
     </aside>
@@ -81,28 +85,71 @@ nav { display: flex; flex-direction: column; gap: 4px; }
   padding: 12px 4px 0 10px;
   border-top: 1px solid var(--border);
 }
-.user { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 0.9rem; }
+.user {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-decoration: none;
+  border-radius: 8px;
+  padding: 4px 6px;
+  margin-left: -6px;
+}
+.user:hover, .user.router-link-active { background: var(--surface-2); color: var(--text); }
 
 .content { flex: 1; min-width: 0; padding: 28px 32px 48px; max-width: 1280px; }
 
+/* Phones: slim top bar, tab bar at the bottom within thumb reach, floating add button */
 @media (max-width: 760px) {
   .layout { flex-direction: column; }
   .sidebar {
     width: 100%;
     height: auto;
-    position: sticky;
     z-index: 10;
     flex-direction: row;
     align-items: center;
-    padding: 10px 16px;
+    padding: calc(8px + env(safe-area-inset-top)) 16px 8px;
     border-right: none;
     border-bottom: 1px solid var(--border);
     gap: 8px;
   }
-  .brand span, .label { display: none; }
-  .brand { padding: 0; }
-  nav { flex-direction: row; flex: 1; }
+  .brand span { display: inline; }
+  .brand { padding: 0; flex: 1; }
   .account { margin-top: 0; padding: 0; border-top: none; }
-  .content { padding: 20px 16px 40px; }
+  .account .label { display: none; }
+
+  nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 20;
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 4px 4px calc(4px + env(safe-area-inset-bottom));
+  }
+  .nav-link { flex: 1; flex-direction: column; gap: 0; padding: 6px 2px; font-size: 0.68rem; text-align: center; }
+  .nav-link .icon { font-size: 1.25rem; line-height: 1.3; }
+  .nav-link.router-link-exact-active { background: transparent; }
+
+  .add {
+    position: fixed;
+    right: 16px;
+    bottom: calc(76px + env(safe-area-inset-bottom));
+    z-index: 30;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    font-size: 1.6rem;
+    padding: 0;
+    box-shadow: 0 6px 18px rgba(79, 70, 229, 0.4);
+  }
+  .add .label { display: none; }
+
+  .content { padding: 20px 16px calc(150px + env(safe-area-inset-bottom)); }
 }
 </style>

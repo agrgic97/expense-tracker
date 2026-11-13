@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { Bar, Doughnut } from 'vue-chartjs'
+import BudgetBar from '../components/BudgetBar.vue'
 import KpiCard from '../components/KpiCard.vue'
-import { api, type PeriodType, type Summary, type Trend } from '../lib/api'
+import { api, type BudgetOverview, type PeriodType, type Summary, type Trend } from '../lib/api'
 import { moneyAxis } from '../lib/chart'
 import { expenseModal, openExpenseModal } from '../lib/expenseModal'
 import { breakdownLabel, formatDate, money, periodLabel, periodNames, shift, today, trendLabel } from '../lib/format'
@@ -12,6 +13,7 @@ const period = ref<PeriodType>('MONTH')
 const date = ref(today())
 const summary = ref<Summary | null>(null)
 const trend = ref<Trend | null>(null)
+const budgets = ref<BudgetOverview | null>(null)
 const error = ref('')
 const loading = ref(false)
 
@@ -21,9 +23,14 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [s, t] = await Promise.all([api.summary(period.value, date.value), api.trend(period.value, date.value, 12)])
+    const [s, t, b] = await Promise.all([
+      api.summary(period.value, date.value),
+      api.trend(period.value, date.value, 12),
+      period.value === 'MONTH' ? api.budgets(date.value) : Promise.resolve(null),
+    ])
     summary.value = s
     trend.value = t
+    budgets.value = b
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -42,6 +49,10 @@ const change = computed(() => {
   if (value === null || value === undefined) return null
   return { value, text: `${value > 0 ? '+' : ''}${value.toLocaleString('de-DE')} %`, up: value > 0 }
 })
+
+const budgeted = computed(() => budgets.value?.categories.filter((c) => c.budget !== null) ?? [])
+const success = getComputedStyle(document.documentElement).getPropertyValue('--success').trim() || '#16a34a'
+const hasIncome = computed(() => trend.value?.buckets.some((b) => b.income > 0) ?? false)
 
 const breakdownData = computed(() => ({
   labels: summary.value?.breakdown.map((b) => breakdownLabel(period.value, b.start)) ?? [],
@@ -68,15 +79,25 @@ const trendData = computed(() => ({
   datasets: [
     {
       type: 'bar' as const,
-      label: 'Summe',
+      label: 'Ausgaben',
       data: trend.value?.buckets.map((b) => b.total) ?? [],
       backgroundColor: trend.value?.buckets.map((_, i, all) => (i === all.length - 1 ? accent : `${accent}66`)) ?? [],
       borderRadius: 6,
       maxBarThickness: 42,
     },
+    ...(hasIncome.value ? [{
+      type: 'line' as const,
+      label: 'Einnahmen',
+      data: trend.value?.buckets.map((b) => b.income) ?? [],
+      borderColor: success,
+      backgroundColor: success,
+      borderWidth: 2,
+      pointRadius: 3,
+      tension: 0.25,
+    }] : []),
     {
       type: 'line' as const,
-      label: 'Durchschnitt',
+      label: 'Ø Ausgaben',
       data: trend.value?.buckets.map(() => trend.value!.average) ?? [],
       borderColor: '#f59e0b',
       borderDash: [6, 4],
@@ -133,6 +154,11 @@ const doughnutOptions = {
         </KpiCard>
         <KpiCard label="Ø pro Tag" :value="money(summary.averagePerDay)"
                  :hint="isCurrent ? 'bis heute' : `über ${summary.breakdown.length} ${period === 'YEAR' ? 'Monate' : 'Tage'}`" />
+        <KpiCard label="Saldo" :value="money(summary.balance)"
+                 :class="{ positive: summary.balance > 0, negative: summary.balance < 0 }">
+          <span>Einnahmen {{ money(summary.incomeTotal) }}</span>
+          <span v-if="summary.savingsRatePercent !== null">· Sparquote {{ summary.savingsRatePercent.toLocaleString('de-DE') }} %</span>
+        </KpiCard>
         <KpiCard label="Anzahl Ausgaben" :value="String(summary.count)"
                  :hint="`Ø ${money(summary.averagePerExpense)} pro Ausgabe`" />
         <KpiCard v-if="summary.projectedTotal !== null" :label="`Hochrechnung ${names.label}`"
@@ -157,6 +183,24 @@ const doughnutOptions = {
           <div v-else class="empty">Keine Ausgaben in diesem Zeitraum</div>
         </section>
       </div>
+
+      <section v-if="budgets && budgeted.length" class="card">
+        <div class="card-head">
+          <h2>Budgets</h2>
+          <RouterLink to="/budgets" class="link small">Alle Budgets ›</RouterLink>
+        </div>
+        <div class="budget-grid">
+          <div v-for="b in budgeted" :key="b.categoryId" class="budget">
+            <div class="budget-line">
+              <span class="chip"><span class="dot" :style="{ background: b.color }" />{{ b.name }}</span>
+              <span class="small num" :class="{ over: b.remaining! < 0 }">
+                {{ money(b.spent) }} / {{ money(b.budget!) }}
+              </span>
+            </div>
+            <BudgetBar :percent="b.percent!" :color="b.color" :elapsed-percent="budgets.elapsedPercent" />
+          </div>
+        </div>
+      </section>
 
       <div class="grid grid-2">
         <section class="card">
@@ -222,6 +266,14 @@ const doughnutOptions = {
   pointer-events: none;
 }
 .trend-stats { gap: 18px; margin-top: 10px; }
+.positive :deep(.value) { color: var(--success); }
+.negative :deep(.value) { color: var(--danger); }
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.card-head h2 { margin: 0; }
+.budget-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px 24px; }
+.budget { display: flex; flex-direction: column; gap: 6px; }
+.budget-line { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.over { color: var(--danger); font-weight: 600; }
 .top-list { list-style: none; margin: 0; padding: 0; }
 .top-list li {
   display: flex;

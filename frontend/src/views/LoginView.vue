@@ -7,8 +7,9 @@ const route = useRoute()
 const router = useRouter()
 
 const registrationEnabled = ref(false)
+const passwordResetEnabled = ref(false)
 const configLoaded = ref(false)
-const form = reactive({ username: '', password: '', confirm: '' })
+const form = reactive({ username: '', password: '', confirm: '', email: '' })
 const error = ref('')
 const busy = ref(false)
 
@@ -25,7 +26,9 @@ const valid = computed(() => {
 
 onMounted(async () => {
   try {
-    registrationEnabled.value = (await api.authConfig()).registrationEnabled
+    const config = await api.authConfig()
+    registrationEnabled.value = config.registrationEnabled
+    passwordResetEnabled.value = config.passwordResetEnabled
   } catch {
     registrationEnabled.value = false
   } finally {
@@ -45,7 +48,9 @@ async function submit() {
   error.value = ''
   try {
     const credentials = { username: form.username.trim(), password: form.password }
-    await (isRegister.value ? api.register(credentials) : api.login(credentials))
+    await (isRegister.value
+      ? api.register({ ...credentials, email: form.email.trim() || null })
+      : api.login(credentials))
     const redirect = typeof route.query.redirect === 'string' && route.query.redirect.startsWith('/')
       ? route.query.redirect : '/'
     router.replace(redirect)
@@ -75,6 +80,11 @@ async function submit() {
         <span v-if="isRegister" class="small">Mindestens 8 Zeichen</span>
       </label>
       <label v-if="isRegister" class="field">
+        E-Mail <span class="optional">(optional)</span>
+        <input v-model="form.email" type="email" autocomplete="email" maxlength="254" />
+        <span class="small">Nur nötig, um ein vergessenes Passwort zurückzusetzen</span>
+      </label>
+      <label v-if="isRegister" class="field">
         Passwort wiederholen
         <input v-model="form.confirm" type="password" autocomplete="new-password" required maxlength="72" />
         <span v-if="mismatch" class="small mismatch">Passwörter stimmen nicht überein</span>
@@ -86,6 +96,10 @@ async function submit() {
       <button type="submit" class="primary submit" :disabled="!valid || busy || registrationClosed">
         {{ busy ? 'Bitte warten…' : isRegister ? 'Registrieren' : 'Anmelden' }}
       </button>
+
+      <RouterLink v-if="!isRegister && passwordResetEnabled" to="/forgot-password" class="link small forgot">
+        Passwort vergessen?
+      </RouterLink>
 
       <p v-if="registrationEnabled || isRegister" class="small muted switch">
         {{ isRegister ? 'Schon ein Konto?' : 'Noch kein Konto?' }}
@@ -106,6 +120,6 @@ async function submit() {
 .submit { justify-content: center; padding: 10px; margin-top: 4px; }
 .switch { margin: 0; text-align: center; }
 .mismatch { color: var(--danger); }
-.link { color: var(--accent); font-weight: 600; text-decoration: none; }
-.link:hover { text-decoration: underline; }
+.forgot { text-align: center; font-weight: 500; }
+.optional { font-size: 0.8rem; }
 </style>
