@@ -51,10 +51,15 @@ public class CategoryService {
             categories.adoptUnowned(userId);
             expenses.adoptUnowned(userId);
         }
-        if (!categories.existsByUserId(userId)) {
-            categories.saveAll(DEFAULTS.stream()
-                    .map(c -> new Category(userId, c.getName(), c.getColor(), c.getKind()))
-                    .toList());
+        // Per kind, so a first user who adopted the old expense categories still gets income categories
+        for (CategoryKind kind : CategoryKind.values()) {
+            if (!categories.existsByUserIdAndKind(userId, kind)) {
+                categories.saveAll(DEFAULTS.stream()
+                        .filter(c -> c.getKind() == kind)
+                        .filter(c -> categories.findByUserIdAndNameIgnoreCase(userId, c.getName()).isEmpty())
+                        .map(c -> new Category(userId, c.getName(), c.getColor(), c.getKind()))
+                        .toList());
+            }
         }
     }
 
