@@ -17,7 +17,7 @@ class LoginRateLimiterTest {
     private final MutableClock clock = new MutableClock(Instant.parse("2026-11-04T10:00:00Z"));
     private final LoginRateLimiter limiter = new LoginRateLimiter(
             new AuthProperties(null, Duration.ofMinutes(15), Duration.ofDays(30), false, true,
-                    new AuthProperties.RateLimit(Duration.ofMinutes(15), 3, 5, 10)),
+                    new AuthProperties.RateLimit(Duration.ofMinutes(15), 3, 5, 10), Duration.ofHours(1)),
             clock);
 
     @Test

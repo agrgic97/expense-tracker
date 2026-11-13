@@ -11,7 +11,8 @@ public record AuthProperties(
         @DefaultValue("30d") Duration refreshTokenValidity,
         @DefaultValue("false") boolean cookieSecure,
         @DefaultValue("true") boolean registrationEnabled,
-        @DefaultValue RateLimit rateLimit) {
+        @DefaultValue RateLimit rateLimit,
+        @DefaultValue("1h") Duration passwordResetValidity) {
 
     public record RateLimit(
             @DefaultValue("15m") Duration window,

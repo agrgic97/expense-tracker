@@ -36,7 +36,7 @@ class AuthServiceTest {
         return new AuthService(users, passwordEncoder, authenticationManager, tokens,
                 mock(RefreshTokenService.class), rateLimiter, categories,
                 new AuthProperties(null, Duration.ofMinutes(15), Duration.ofDays(30), false, registrationEnabled,
-                        new AuthProperties.RateLimit(Duration.ofMinutes(15), 5, 20, 30)));
+                        new AuthProperties.RateLimit(Duration.ofMinutes(15), 5, 20, 30), Duration.ofHours(1)));
     }
 
     @Test
@@ -45,7 +45,7 @@ class AuthServiceTest {
         when(users.save(any())).thenAnswer(inv -> withId(inv.getArgument(0), 1L));
         when(users.count()).thenReturn(1L);
 
-        service(true).register(new RegisterRequest("toni", "geheim123"), IP);
+        service(true).register(new RegisterRequest("toni", "geheim123", null), IP);
 
         verify(categories).initializeFor(1L, true);
     }
@@ -55,7 +55,7 @@ class AuthServiceTest {
         when(users.save(any())).thenAnswer(inv -> withId(inv.getArgument(0), 2L));
         when(users.count()).thenReturn(2L);
 
-        service(true).register(new RegisterRequest("anna", "geheim123"), IP);
+        service(true).register(new RegisterRequest("anna", "geheim123", null), IP);
 
         verify(categories).initializeFor(2L, false);
     }
@@ -64,14 +64,14 @@ class AuthServiceTest {
     void rejectsTakenUsername() {
         when(users.existsByUsernameIgnoreCase("Toni")).thenReturn(true);
 
-        assertThatThrownBy(() -> service(true).register(new RegisterRequest("Toni", "geheim123"), IP))
+        assertThatThrownBy(() -> service(true).register(new RegisterRequest("Toni", "geheim123", null), IP))
                 .isInstanceOf(ConflictException.class);
         verify(users, never()).save(any());
     }
 
     @Test
     void rejectsRegistrationWhenDisabled() {
-        assertThatThrownBy(() -> service(false).register(new RegisterRequest("toni", "geheim123"), IP))
+        assertThatThrownBy(() -> service(false).register(new RegisterRequest("toni", "geheim123", null), IP))
                 .isInstanceOf(ResponseStatusException.class);
         verify(users, never()).save(any());
     }
