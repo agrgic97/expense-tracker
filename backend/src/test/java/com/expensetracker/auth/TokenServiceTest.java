@@ -64,11 +64,11 @@ class TokenServiceTest {
 
     static AuthProperties props(String secret, Duration accessValidity) {
         return new AuthProperties(secret, accessValidity, Duration.ofDays(30), false, true,
-                new AuthProperties.RateLimit(Duration.ofMinutes(15), 5, 20, 30));
+                new AuthProperties.RateLimit(Duration.ofMinutes(15), 5, 20, 30), Duration.ofHours(1));
     }
 
     private static AppUser user(Long id, String username) {
-        AppUser user = new AppUser(username, "{noop}x");
+        AppUser user = new AppUser(username, "{noop}x", null);
         ReflectionTestUtils.setField(user, "id", id);
         return user;
     }

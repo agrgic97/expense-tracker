@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
+/** A booked entry: an expense or, if its category is an income category, an income. */
 @Entity
 public class Expense {
 
@@ -36,6 +37,10 @@ public class Expense {
     @JoinColumn(name = "category_id", nullable = false)
     private Category category;
 
+    /** The recurring template this entry was generated from, if any. */
+    @Column(name = "recurring_id")
+    private Long recurringId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -48,6 +53,13 @@ public class Expense {
         this.date = date;
         this.description = description;
         this.category = category;
+    }
+
+    public static Expense fromRecurring(Long userId, BigDecimal amount, LocalDate date, String description,
+                                        Category category, Long recurringId) {
+        Expense expense = new Expense(userId, amount, date, description, category);
+        expense.recurringId = recurringId;
+        return expense;
     }
 
     public Long getId() {
@@ -88,6 +100,14 @@ public class Expense {
 
     public void setCategory(Category category) {
         this.category = category;
+    }
+
+    public Long getRecurringId() {
+        return recurringId;
+    }
+
+    public boolean isIncome() {
+        return category.isIncome();
     }
 
     public Instant getCreatedAt() {

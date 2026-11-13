@@ -2,6 +2,8 @@ package com.expensetracker.auth;
 
 import com.expensetracker.auth.AuthDtos.AuthConfig;
 import com.expensetracker.auth.AuthDtos.LoginRequest;
+import com.expensetracker.auth.AuthDtos.PasswordResetConfirmation;
+import com.expensetracker.auth.AuthDtos.PasswordResetRequest;
 import com.expensetracker.auth.AuthDtos.RegisterRequest;
 import com.expensetracker.auth.AuthDtos.SessionResponse;
 import com.expensetracker.auth.AuthDtos.UserResponse;
@@ -23,18 +25,21 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final AuthService service;
+    private final PasswordResetService passwordReset;
     private final AuthCookies cookies;
     private final CurrentUser currentUser;
 
-    public AuthController(AuthService service, AuthCookies cookies, CurrentUser currentUser) {
+    public AuthController(AuthService service, PasswordResetService passwordReset, AuthCookies cookies,
+                          CurrentUser currentUser) {
         this.service = service;
+        this.passwordReset = passwordReset;
         this.cookies = cookies;
         this.currentUser = currentUser;
     }
 
     @GetMapping("/config")
     public AuthConfig config() {
-        return new AuthConfig(service.registrationEnabled());
+        return new AuthConfig(service.registrationEnabled(), passwordReset.enabled());
     }
 
     @PostMapping("/register")
@@ -66,6 +71,20 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(HttpServletRequest request, HttpServletResponse response) {
         cookies.refreshToken(request).ifPresent(service::logout);
+        cookies.clear(response);
+    }
+
+    @PostMapping("/password-reset/request")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void requestPasswordReset(@Valid @RequestBody PasswordResetRequest body, HttpServletRequest request) {
+        passwordReset.requestReset(body.email(), request.getRemoteAddr());
+    }
+
+    @PostMapping("/password-reset/confirm")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void confirmPasswordReset(@Valid @RequestBody PasswordResetConfirmation body, HttpServletRequest request,
+                                     HttpServletResponse response) {
+        passwordReset.resetPassword(body.token(), body.password(), request.getRemoteAddr());
         cookies.clear(response);
     }
 

@@ -15,6 +15,7 @@ public final class StatsDtos {
             LocalDate start,
             LocalDate end,
             boolean current,
+            /** Expenses only, like every figure below that does not mention income. */
             BigDecimal total,
             long count,
             BigDecimal averagePerDay,
@@ -25,14 +26,20 @@ public final class StatsDtos {
             BigDecimal changePercent,
             List<CategoryTotal> byCategory,
             List<Bucket> breakdown,
-            List<ExpenseDto> topExpenses) {
+            List<ExpenseDto> topExpenses,
+            BigDecimal incomeTotal,
+            /** Income minus expenses */
+            BigDecimal balance,
+            /** Share of income that was not spent; null without income */
+            BigDecimal savingsRatePercent) {
     }
 
     public record CategoryTotal(Long categoryId, String name, String color, BigDecimal total, long count,
                                 BigDecimal sharePercent) {
     }
 
-    public record Bucket(LocalDate start, LocalDate end, BigDecimal total, long count) {
+    /** {@code total} and {@code count} cover expenses, {@code income} the income in the same range. */
+    public record Bucket(LocalDate start, LocalDate end, BigDecimal total, long count, BigDecimal income) {
     }
 
     public record Trend(PeriodType period, List<Bucket> buckets, BigDecimal average, BigDecimal max,

@@ -81,6 +81,11 @@ public class RefreshTokenService {
                 .ifPresent(token -> repository.revokeFamily(token.getFamilyId(), clock.instant()));
     }
 
+    @Transactional
+    public void revokeAll(Long userId) {
+        repository.revokeAllOfUser(userId, clock.instant());
+    }
+
     private IssuedRefreshToken issue(Long userId, UUID familyId) {
         byte[] bytes = new byte[32];
         random.nextBytes(bytes);

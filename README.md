@@ -7,13 +7,26 @@ Webapp zum Erfassen von Ausgaben mit Statistiken für Wochen, Monate und Jahre.
 ## Features
 
 - Anmeldung mit Benutzername und Passwort (JWT), jeder Benutzer sieht nur seine eigenen Daten
-- Ausgaben erfassen, bearbeiten, löschen – mit Suche, Kategorie- und Datumsfilter, Paginierung und CSV-Export
-- Eigene Kategorien mit Farben (9 Standardkategorien werden beim ersten Start angelegt)
+- **Ausgaben und Einnahmen** erfassen, bearbeiten, löschen – mit Suche, Typ-, Kategorie- und Datumsfilter, Paginierung und CSV-Export
+  - Ob eine Buchung Ausgabe oder Einnahme ist, bestimmt ihre Kategorie (Typ *Ausgabe* oder *Einnahme*)
+- Eigene Kategorien mit Farben (Standardkategorien werden beim ersten Start angelegt)
+- **Budgets:** monatliches Limit pro Ausgabe-Kategorie, gelb ab 80 %, rot über 100 %, mit Markierung, wie weit der Monat ist
+- **Wiederkehrende Buchungen** (wöchentlich, monatlich, vierteljährlich, jährlich), z. B. Miete, Abos, Gehalt
+  - Ein Job bucht fällige Einträge kurz nach Mitternacht und beim Start (holt Ausfallzeiten nach)
+  - Liegt das Startdatum in der Vergangenheit, werden die verpassten Termine nachgebucht; nach einer Pause nicht
+- **Regeln:** „Beschreibung enthält X → Kategorie Y“. Werden beim Erfassen und Import vorgeschlagen und lassen sich rückwirkend anwenden. Bei mehreren Treffern gewinnt der längste Suchtext.
+- **Ein Dialog „Erfassen“ für alles:** oben eine Buchung von Hand eingeben, darunter einen oder mehrere Kontoauszüge ablegen
+  - **PDF-Kontoauszüge** werden auf dem Server gelesen (Apache PDFBox). Erkannt werden Zeilen, die mit dem Buchungsdatum beginnen und mit dem Betrag enden; Folgezeilen ergänzen den Text. Vorzeichen als `-`/`+` (vorn oder hinten) oder `S`/`H`. Fehlt das Vorzeichen (Soll/Haben in getrennten Spalten), wird geraten und der Eintrag zur Prüfung markiert. Eingescannte PDFs ohne Text gehen nicht.
+  - **CSV-Exporte** werden im Browser gelesen: Encoding (UTF-8/Windows-1252), Trennzeichen, Kopfzeile und Spalten werden erkannt
+  - Danach eine Übersicht aller Einträge mit Kategorievorschlag. Bereits gebuchte Einträge und Doppelte aus sich überschneidenden Auszügen sind abgewählt; Beschreibung, Kategorie und Ausgabe/Einnahme lassen sich vor dem Übernehmen ändern
+  - Höchstens 12 Dateien, 10 MB pro Datei
 - Dashboard pro **Woche / Monat / Jahr** (vor- und zurückblättern):
-  - Gesamtsumme mit Veränderung zur Vorperiode (bei laufender Periode fair gegen den gleichen Zeitraum der Vorperiode)
-  - Ø pro Tag, Anzahl und Ø pro Ausgabe, Hochrechnung für die laufende Periode
-  - Verlauf pro Tag bzw. Monat, Verteilung nach Kategorie, größte Ausgaben
-  - Vergleich der letzten 12 Wochen/Monate/Jahre inkl. Durchschnitt, Min und Max
+  - Ausgaben mit Veränderung zur Vorperiode (bei laufender Periode fair gegen den gleichen Zeitraum der Vorperiode)
+  - Saldo, Einnahmen und Sparquote, Ø pro Tag, Anzahl und Ø pro Ausgabe, Hochrechnung für die laufende Periode
+  - Verlauf pro Tag bzw. Monat, Verteilung nach Kategorie, größte Ausgaben, Budgets (Monatsansicht)
+  - Vergleich der letzten 12 Wochen/Monate/Jahre inkl. Einnahmen, Durchschnitt, Min und Max
+- **Konto:** E-Mail-Adresse hinterlegen, Passwort ändern (meldet andere Geräte ab), **Passwort vergessen** per Mail-Link
+- **Installierbar als App (PWA)** auf Handy und Desktop, mit Navigation unten und Schnellaktionen „Neue Ausgabe/Einnahme“
 
 ## Starten mit Docker
 
@@ -43,6 +56,7 @@ App: http://localhost:8080 (Port über `APP_PORT` änderbar). Die Daten liegen i
   - Alle Grenzen gelten je 15 Minuten. Danach antwortet die API mit `429` und `Retry-After`.
   - Die Zähler liegen im Speicher und werden bei einem Neustart zurückgesetzt.
 - **Erster Benutzer:** Wer sich als Erstes registriert, übernimmt alle Daten, die vor Einführung der Anmeldung angelegt wurden. Jeder weitere Benutzer startet mit den Standardkategorien.
+- **Passwort vergessen:** Nur verfügbar, wenn `MAIL_HOST` gesetzt ist. Der Link in der Mail ist 1 Stunde gültig (`PASSWORD_RESET_VALIDITY`) und nur einmal verwendbar; in der DB steht nur sein Hash. Danach sind alle Anmeldungen des Kontos beendet. Anfragen verraten nicht, ob es eine Adresse gibt, und sind auf 5 Mails pro Adresse und IP je 15 Minuten begrenzt. `APP_BASE_URL` muss auf die öffentliche Adresse zeigen, sonst führen die Links ins Leere.
 - **`JWT_SECRET`** in `.env` setzen (mind. 32 Zeichen, z. B. `openssl rand -base64 48`). Mit `REGISTRATION_ENABLED=false` lässt sich die Registrierung abschalten.
 
 ## Produktion
@@ -58,6 +72,16 @@ cd frontend && npm install && npm run dev   # UI auf :5173, /api wird an :8080 w
 ```
 
 Tests: `cd backend && mvn test`
+
+Mails lokal testen mit [Mailpit](https://mailpit.axllent.org/) (Weboberfläche auf :8025):
+
+```bash
+docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
+MAIL_HOST=localhost MAIL_PORT=1025 MAIL_SMTP_AUTH=false MAIL_STARTTLS=false APP_BASE_URL=http://localhost:5173 \
+  mvn spring-boot:run
+```
+
+Der Service Worker der PWA wird nur im Produktions-Build registriert (`npm run build && npm run preview`), nicht mit `npm run dev`.
 
 ## Architektur
 

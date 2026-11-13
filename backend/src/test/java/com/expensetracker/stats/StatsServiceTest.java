@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.expensetracker.auth.CurrentUser;
 import com.expensetracker.category.Category;
+import com.expensetracker.category.CategoryKind;
 import com.expensetracker.expense.Expense;
 import com.expensetracker.expense.ExpenseRepository;
 import com.expensetracker.stats.StatsDtos.Summary;
@@ -46,9 +47,9 @@ class StatsServiceTest {
                 expense("30.00", TODAY, food),
                 expense("10.00", TODAY.minusDays(1), food),
                 expense("800.00", LocalDate.of(2026, 11, 1), rent)));
-        when(repository.sumInRange(USER, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31)))
+        when(repository.sumInRange(USER, CategoryKind.EXPENSE, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31)))
                 .thenReturn(new BigDecimal("1000.00"));
-        when(repository.sumInRange(USER, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 4)))
+        when(repository.sumInRange(USER, CategoryKind.EXPENSE, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 4)))
                 .thenReturn(new BigDecimal("700.00"));
 
         Summary summary = service.summary(PeriodType.MONTH, TODAY);
@@ -69,9 +70,43 @@ class StatsServiceTest {
     }
 
     @Test
+    void separatesIncomeFromExpenses() {
+        Category salary = category(3L, "Gehalt", CategoryKind.INCOME);
+        when(repository.findAllInRange(eq(USER), any(), any())).thenReturn(List.of(
+                expense("2000.00", LocalDate.of(2026, 10, 1), salary),
+                expense("500.00", LocalDate.of(2026, 10, 2), rent),
+                expense("1000.00", LocalDate.of(2026, 10, 3), food)));
+        when(repository.sumInRange(eq(USER), eq(CategoryKind.EXPENSE), any(), any())).thenReturn(BigDecimal.ZERO);
+
+        Summary summary = service.summary(PeriodType.MONTH, LocalDate.of(2026, 10, 15));
+
+        assertThat(summary.total()).isEqualByComparingTo("1500.00");
+        assertThat(summary.count()).isEqualTo(2);
+        assertThat(summary.incomeTotal()).isEqualByComparingTo("2000.00");
+        assertThat(summary.balance()).isEqualByComparingTo("500.00");
+        assertThat(summary.savingsRatePercent()).isEqualByComparingTo("25.0");
+        assertThat(summary.byCategory()).extracting(StatsDtos.CategoryTotal::name).containsExactly("Lebensmittel", "Wohnen");
+        assertThat(summary.topExpenses()).hasSize(2);
+        assertThat(summary.breakdown().getFirst().income()).isEqualByComparingTo("2000.00");
+        assertThat(summary.breakdown().getFirst().total()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void savingsRateIsNullWithoutIncome() {
+        when(repository.findAllInRange(eq(USER), any(), any())).thenReturn(List.of(expense("10.00", TODAY, food)));
+        when(repository.sumInRange(eq(USER), eq(CategoryKind.EXPENSE), any(), any())).thenReturn(BigDecimal.ZERO);
+
+        Summary summary = service.summary(PeriodType.MONTH, TODAY);
+
+        assertThat(summary.incomeTotal()).isEqualByComparingTo("0");
+        assertThat(summary.balance()).isEqualByComparingTo("-10.00");
+        assertThat(summary.savingsRatePercent()).isNull();
+    }
+
+    @Test
     void pastPeriodWithoutPreviousDataHasNoChange() {
         when(repository.findAllInRange(eq(USER), any(), any())).thenReturn(List.of(expense("70.00", LocalDate.of(2025, 3, 3), food)));
-        when(repository.sumInRange(eq(USER), any(), any())).thenReturn(BigDecimal.ZERO);
+        when(repository.sumInRange(eq(USER), eq(CategoryKind.EXPENSE), any(), any())).thenReturn(BigDecimal.ZERO);
 
         Summary summary = service.summary(PeriodType.WEEK, LocalDate.of(2025, 3, 5));
 
@@ -97,7 +132,11 @@ class StatsServiceTest {
     }
 
     private static Category category(Long id, String name) {
-        Category category = new Category(USER, name, "#000000");
+        return category(id, name, CategoryKind.EXPENSE);
+    }
+
+    private static Category category(Long id, String name, CategoryKind kind) {
+        Category category = new Category(USER, name, "#000000", kind);
         ReflectionTestUtils.setField(category, "id", id);
         return category;
     }

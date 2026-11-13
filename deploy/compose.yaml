@@ -48,6 +48,12 @@ services:
       REFRESH_TOKEN_VALIDITY: ${REFRESH_TOKEN_VALIDITY:-30d}
       COOKIE_SECURE: "true"
       REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-false}
+      APP_BASE_URL: https://${DOMAIN}
+      MAIL_HOST: ${MAIL_HOST:-}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
     depends_on:
       db:
         condition: service_healthy

@@ -15,7 +15,7 @@ public interface CategoryRepository extends JpaRepository<Category, Long> {
 
     Optional<Category> findByUserIdAndNameIgnoreCase(Long userId, String name);
 
-    boolean existsByUserId(Long userId);
+    boolean existsByUserIdAndKind(Long userId, CategoryKind kind);
 
     /** Assigns categories created before authentication existed to the given user. */
     @Modifying

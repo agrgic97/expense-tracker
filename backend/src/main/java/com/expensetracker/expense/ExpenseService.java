@@ -66,6 +66,6 @@ public class ExpenseService {
 
     private Expense find(Long id) {
         return expenses.findByIdAndUserId(id, currentUser.id())
-                .orElseThrow(() -> new NotFoundException("Ausgabe " + id + " nicht gefunden"));
+                .orElseThrow(() -> new NotFoundException("Buchung " + id + " nicht gefunden"));
     }
 }

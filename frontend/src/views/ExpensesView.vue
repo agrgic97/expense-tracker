@@ -1,20 +1,21 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { api, type Category, type Expense, type ExpenseQuery, type Page } from '../lib/api'
+import { api, type Category, type CategoryKind, type Expense, type ExpenseQuery, type Page } from '../lib/api'
 import { expenseModal, openExpenseModal } from '../lib/expenseModal'
-import { formatDate, money } from '../lib/format'
+import { formatDate, money, signedMoney } from '../lib/format'
 
 const categories = ref<Category[]>([])
 const result = ref<Page<Expense> | null>(null)
 const error = ref('')
 const confirmId = ref<number | null>(null)
 
-const filter = reactive({ q: '', categoryId: '' as number | '', from: '', to: '' })
+const filter = reactive({ q: '', kind: '' as CategoryKind | '', categoryId: '' as number | '', from: '', to: '' })
 const page = ref(0)
 const size = 25
 
 const query = computed<ExpenseQuery>(() => ({
   q: filter.q || undefined,
+  kind: filter.kind || undefined,
   categoryId: filter.categoryId === '' ? undefined : filter.categoryId,
   from: filter.from || undefined,
   to: filter.to || undefined,
@@ -22,8 +23,16 @@ const query = computed<ExpenseQuery>(() => ({
   size,
 }))
 
-const pageSum = computed(() => result.value?.content.reduce((sum, e) => sum + e.amount, 0) ?? 0)
-const hasFilter = computed(() => !!(filter.q || filter.categoryId !== '' || filter.from || filter.to))
+// Net sum: income counts positive, expenses negative
+const pageSum = computed(() =>
+  result.value?.content.reduce((sum, e) => sum + (e.kind === 'INCOME' ? e.amount : -e.amount), 0) ?? 0)
+const hasFilter = computed(() => !!(filter.q || filter.kind || filter.categoryId !== '' || filter.from || filter.to))
+const categoryOptions = computed(() => categories.value.filter((c) => !filter.kind || c.kind === filter.kind))
+
+// A category of the other kind cannot match anymore
+watch(() => filter.kind, () => {
+  if (filter.categoryId !== '' && !categoryOptions.value.some((c) => c.id === filter.categoryId)) filter.categoryId = ''
+})
 
 async function load() {
   error.value = ''
@@ -77,17 +86,17 @@ async function exportCsv() {
 }
 
 function resetFilter() {
-  Object.assign(filter, { q: '', categoryId: '', from: '', to: '' })
+  Object.assign(filter, { q: '', kind: '', categoryId: '', from: '', to: '' })
 }
 </script>
 
 <template>
   <div class="stack">
     <div class="page-header">
-      <h1>Ausgaben</h1>
+      <h1>Buchungen</h1>
       <div class="row">
         <button @click="exportCsv">⬇ CSV-Export</button>
-        <button class="primary" @click="openExpenseModal()">＋ Neue Ausgabe</button>
+        <button class="primary" @click="openExpenseModal()">＋ Erfassen</button>
       </div>
     </div>
 
@@ -97,10 +106,18 @@ function resetFilter() {
         <input v-model="filter.q" type="search" placeholder="Beschreibung…" />
       </label>
       <label class="field">
+        Typ
+        <select v-model="filter.kind">
+          <option value="">Alle</option>
+          <option value="EXPENSE">Ausgaben</option>
+          <option value="INCOME">Einnahmen</option>
+        </select>
+      </label>
+      <label class="field">
         Kategorie
         <select v-model="filter.categoryId">
           <option value="">Alle</option>
-          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+          <option v-for="c in categoryOptions" :key="c.id" :value="c.id">{{ c.name }}</option>
         </select>
       </label>
       <label class="field">
@@ -125,9 +142,14 @@ function resetFilter() {
           <tbody>
             <tr v-for="e in result.content" :key="e.id">
               <td class="nowrap muted">{{ formatDate(e.date) }}</td>
-              <td>{{ e.description }}</td>
+              <td>
+                {{ e.description }}
+                <span v-if="e.recurringId" class="recurring" title="Aus wiederkehrender Buchung">🔁</span>
+              </td>
               <td><span class="chip"><span class="dot" :style="{ background: e.categoryColor }" />{{ e.categoryName }}</span></td>
-              <td class="num"><strong>{{ money(e.amount) }}</strong></td>
+              <td class="num" :class="{ income: e.kind === 'INCOME' }">
+                <strong>{{ signedMoney(e.amount, e.kind === 'INCOME') }}</strong>
+              </td>
               <td class="actions">
                 <button class="ghost" title="Bearbeiten" @click="openExpenseModal(e)">✏️</button>
                 <button class="ghost danger" :title="confirmId === e.id ? 'Wirklich löschen?' : 'Löschen'"
@@ -140,12 +162,17 @@ function resetFilter() {
         </table>
       </div>
       <div v-else-if="result" class="empty">
-        {{ hasFilter ? 'Keine Ausgaben für diese Filter gefunden.' : 'Noch keine Ausgaben erfasst.' }}
+        <template v-if="hasFilter">Keine Buchungen für diese Filter gefunden.</template>
+        <template v-else>
+          <p>Noch keine Buchungen erfasst.</p>
+          <button class="primary" @click="openExpenseModal()">＋ Buchung erfassen oder Kontoauszug importieren</button>
+        </template>
       </div>
 
       <div v-if="result && result.totalElements > 0" class="footer row">
         <span class="muted small">
-          {{ result.totalElements }} Einträge · Summe dieser Seite: <strong>{{ money(pageSum) }}</strong>
+          {{ result.totalElements }} Einträge · Saldo dieser Seite:
+          <strong :class="{ income: pageSum > 0 }">{{ money(pageSum) }}</strong>
         </span>
         <div v-if="result.totalPages > 1" class="row">
           <button :disabled="page === 0" @click="page--">‹ Zurück</button>
@@ -163,5 +190,7 @@ function resetFilter() {
 .reset { align-self: flex-end; }
 .nowrap { white-space: nowrap; }
 .actions { white-space: nowrap; text-align: right; width: 1%; }
+.recurring { font-size: 0.8rem; margin-left: 4px; }
+
 .footer { justify-content: space-between; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
 </style>

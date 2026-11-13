@@ -1,5 +1,6 @@
 package com.expensetracker.expense;
 
+import com.expensetracker.category.CategoryKind;
 import com.expensetracker.common.PageResponse;
 import jakarta.validation.Valid;
 import java.nio.charset.StandardCharsets;
@@ -36,9 +37,10 @@ public class ExpenseController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) CategoryKind kind,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size) {
-        return service.search(new ExpenseFilter(from, to, categoryId, q), page, size);
+        return service.search(new ExpenseFilter(from, to, categoryId, q, kind), page, size);
     }
 
     @GetMapping(value = "/export", produces = "text/csv")
@@ -46,17 +48,21 @@ public class ExpenseController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) Long categoryId,
-            @RequestParam(required = false) String q) {
-        StringBuilder csv = new StringBuilder("Datum;Beschreibung;Kategorie;Betrag\n");
-        for (ExpenseDto e : service.searchAll(new ExpenseFilter(from, to, categoryId, q))) {
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) CategoryKind kind) {
+        // Expenses are exported as negative amounts, like on a bank statement, so the file can be re-imported
+        StringBuilder csv = new StringBuilder("Datum;Beschreibung;Kategorie;Typ;Betrag\n");
+        for (ExpenseDto e : service.searchAll(new ExpenseFilter(from, to, categoryId, q, kind))) {
+            boolean income = e.kind() == CategoryKind.INCOME;
             csv.append(e.date()).append(';')
                     .append(csvField(e.description())).append(';')
                     .append(csvField(e.categoryName())).append(';')
-                    .append(e.amount().toPlainString().replace('.', ','))
+                    .append(income ? "Einnahme" : "Ausgabe").append(';')
+                    .append(income ? "" : "-").append(e.amount().toPlainString().replace('.', ','))
                     .append('\n');
         }
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"ausgaben.csv\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"buchungen.csv\"")
                 .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
                 .body(csv.toString().getBytes(StandardCharsets.UTF_8));
     }

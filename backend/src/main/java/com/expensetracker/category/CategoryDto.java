@@ -1,4 +1,7 @@
 package com.expensetracker.category;
 
-public record CategoryDto(Long id, String name, String color, long expenseCount) {
+import java.math.BigDecimal;
+
+public record CategoryDto(Long id, String name, String color, CategoryKind kind, BigDecimal monthlyBudget,
+                          long expenseCount) {
 }
