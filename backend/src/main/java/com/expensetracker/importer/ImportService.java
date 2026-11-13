@@ -88,7 +88,7 @@ public class ImportService {
         LocalDate from = rows.stream().map(StatementRow::date).min(Comparator.naturalOrder()).orElseThrow();
         LocalDate to = rows.stream().map(StatementRow::date).max(Comparator.naturalOrder()).orElseThrow();
         Set<String> booked = expenses.findByUserIdAndDateBetween(currentUser.id(), from, to).stream()
-                .map(e -> key(e.getDate(), e.getAmount(), e.getDescription()))
+                .map(e -> key(e.getDate(), e.getCategory().getKind(), e.getAmount(), e.getDescription()))
                 .collect(Collectors.toSet());
 
         return rows.stream()
@@ -98,7 +98,7 @@ public class ImportService {
                             .map(CategoryRule::getCategory)
                             .map(Category::getId)
                             .orElse(null);
-                    boolean duplicate = booked.contains(key(row.date(), row.amount().abs(), row.description()));
+                    boolean duplicate = booked.contains(key(row.date(), kind, row.amount().abs(), row.description()));
                     return new PreviewRow(categoryId, duplicate);
                 })
                 .toList();
@@ -121,9 +121,12 @@ public class ImportService {
         return entries.size();
     }
 
-    /** Identifies an entry independent of its category, so re-importing the same statement is recognized. */
-    static String key(LocalDate date, BigDecimal amount, String description) {
-        return date + "|" + amount.setScale(2, RoundingMode.HALF_UP).toPlainString() + "|"
+    /**
+     * Identifies an entry independent of its category, so re-importing the same statement is recognized. The kind
+     * is part of it: a refund matching an earlier purchase in date, amount and text is not the same entry.
+     */
+    static String key(LocalDate date, CategoryKind kind, BigDecimal amount, String description) {
+        return date + "|" + kind + "|" + amount.setScale(2, RoundingMode.HALF_UP).toPlainString() + "|"
                 + description.trim().replaceAll("\\s+", " ").toLowerCase(Locale.GERMAN);
     }
 }

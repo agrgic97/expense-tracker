@@ -49,12 +49,15 @@ class ImportServiceTest {
                 new StatementRow(DAY, new BigDecimal("-12.50"), "rewe markt"),
                 new StatementRow(DAY.plusDays(1), new BigDecimal("-12.50"), "REWE Markt"),
                 new StatementRow(DAY, new BigDecimal("2500.00"), "Lohn ACME"),
-                new StatementRow(DAY, new BigDecimal("-30.00"), "ACME Shop")));
+                new StatementRow(DAY, new BigDecimal("-30.00"), "ACME Shop"),
+                // Same date, amount and text as the booked purchase, but money coming back
+                new StatementRow(DAY, new BigDecimal("12.50"), "REWE Markt")));
 
         assertThat(preview).containsExactly(
                 new PreviewRow(1L, true),
                 new PreviewRow(1L, false),
                 new PreviewRow(2L, false),
+                new PreviewRow(null, false),
                 new PreviewRow(null, false));
     }
 
