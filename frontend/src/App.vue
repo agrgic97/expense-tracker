@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
-import ExpenseDialog from './components/ExpenseDialog.vue'
+import EntryDialog from './components/EntryDialog.vue'
 import { api } from './lib/api'
 import { auth } from './lib/auth'
 import { expenseModal, openExpenseModal } from './lib/expenseModal'
@@ -26,7 +26,9 @@ const links = [
           <span class="icon">{{ link.icon }}</span><span class="label">{{ link.label }}</span>
         </RouterLink>
       </nav>
-      <button class="primary add" title="Neue Ausgabe" @click="openExpenseModal()">＋ <span class="label">Neue Ausgabe</span></button>
+      <button class="primary add" title="Ausgabe, Einnahme oder Kontoauszug erfassen" @click="openExpenseModal()">
+        ＋ <span class="label">Erfassen</span>
+      </button>
       <div class="account">
         <RouterLink to="/account" class="user" :title="`Konto: ${auth.user?.username}`">
           👤 <span class="label">{{ auth.user?.username }}</span>
@@ -37,7 +39,7 @@ const links = [
     <main class="content">
       <RouterView />
     </main>
-    <ExpenseDialog v-if="expenseModal.open" />
+    <EntryDialog v-if="expenseModal.open" />
   </div>
 </template>
 

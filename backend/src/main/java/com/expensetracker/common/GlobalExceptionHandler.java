@@ -11,6 +11,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 @RestControllerAdvice
@@ -24,6 +25,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .sorted()
                 .collect(Collectors.joining(", "));
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, "Ungültige Eingabe: " + detail);
+        return handleExceptionInternal(ex, problem, headers, status, request);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status,
+                "Die Dateien sind zu groß (höchstens 10 MB pro Datei und 50 MB insgesamt)");
         return handleExceptionInternal(ex, problem, headers, status, request);
     }
 

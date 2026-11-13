@@ -15,9 +15,11 @@ Webapp zum Erfassen von Ausgaben mit Statistiken für Wochen, Monate und Jahre.
   - Ein Job bucht fällige Einträge kurz nach Mitternacht und beim Start (holt Ausfallzeiten nach)
   - Liegt das Startdatum in der Vergangenheit, werden die verpassten Termine nachgebucht; nach einer Pause nicht
 - **Regeln:** „Beschreibung enthält X → Kategorie Y“. Werden beim Erfassen und Import vorgeschlagen und lassen sich rückwirkend anwenden. Bei mehreren Treffern gewinnt der längste Suchtext.
-- **CSV-Import** von Kontoauszügen (Sparkasse, ING, DKB, N26, comdirect …)
-  - Die Datei wird im Browser gelesen: Encoding (UTF-8/Windows-1252), Trennzeichen, Kopfzeile und Spalten werden erkannt
-  - Vorschau mit Kategorievorschlag; bereits vorhandene Buchungen (gleiches Datum, Betrag, Beschreibung) sind abgewählt
+- **Ein Dialog „Erfassen“ für alles:** oben eine Buchung von Hand eingeben, darunter einen oder mehrere Kontoauszüge ablegen
+  - **PDF-Kontoauszüge** werden auf dem Server gelesen (Apache PDFBox). Erkannt werden Zeilen, die mit dem Buchungsdatum beginnen und mit dem Betrag enden; Folgezeilen ergänzen den Text. Vorzeichen als `-`/`+` (vorn oder hinten) oder `S`/`H`. Fehlt das Vorzeichen (Soll/Haben in getrennten Spalten), wird geraten und der Eintrag zur Prüfung markiert. Eingescannte PDFs ohne Text gehen nicht.
+  - **CSV-Exporte** werden im Browser gelesen: Encoding (UTF-8/Windows-1252), Trennzeichen, Kopfzeile und Spalten werden erkannt
+  - Danach eine Übersicht aller Einträge mit Kategorievorschlag. Bereits gebuchte Einträge und Doppelte aus sich überschneidenden Auszügen sind abgewählt; Beschreibung, Kategorie und Ausgabe/Einnahme lassen sich vor dem Übernehmen ändern
+  - Höchstens 12 Dateien, 10 MB pro Datei
 - Dashboard pro **Woche / Monat / Jahr** (vor- und zurückblättern):
   - Ausgaben mit Veränderung zur Vorperiode (bei laufender Periode fair gegen den gleichen Zeitraum der Vorperiode)
   - Saldo, Einnahmen und Sparquote, Ø pro Tag, Anzahl und Ø pro Ausgabe, Hochrechnung für die laufende Periode

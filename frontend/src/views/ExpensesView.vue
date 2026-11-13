@@ -95,10 +95,8 @@ function resetFilter() {
     <div class="page-header">
       <h1>Buchungen</h1>
       <div class="row">
-        <RouterLink to="/import" class="btn">⬆ CSV-Import</RouterLink>
         <button @click="exportCsv">⬇ CSV-Export</button>
-        <button @click="openExpenseModal(null, 'INCOME')">＋ Einnahme</button>
-        <button class="primary" @click="openExpenseModal()">＋ Ausgabe</button>
+        <button class="primary" @click="openExpenseModal()">＋ Erfassen</button>
       </div>
     </div>
 
@@ -166,8 +164,8 @@ function resetFilter() {
       <div v-else-if="result" class="empty">
         <template v-if="hasFilter">Keine Buchungen für diese Filter gefunden.</template>
         <template v-else>
-          Noch keine Buchungen erfasst. Lege eine an oder
-          <RouterLink to="/import">importiere einen Kontoauszug</RouterLink>.
+          <p>Noch keine Buchungen erfasst.</p>
+          <button class="primary" @click="openExpenseModal()">＋ Buchung erfassen oder Kontoauszug importieren</button>
         </template>
       </div>
 

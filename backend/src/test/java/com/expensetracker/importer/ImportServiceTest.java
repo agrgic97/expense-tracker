@@ -42,7 +42,8 @@ class ImportServiceTest {
                 new Expense(USER, new BigDecimal("12.5"), DAY, "REWE  Markt", food)));
         CurrentUser currentUser = mock(CurrentUser.class);
         when(currentUser.id()).thenReturn(USER);
-        ImportService service = new ImportService(expenses, mock(CategoryService.class), rules, currentUser);
+        ImportService service = new ImportService(expenses, mock(CategoryService.class), rules, currentUser,
+                mock(StatementPdfReader.class), java.time.Clock.systemDefaultZone());
 
         List<PreviewRow> preview = service.preview(List.of(
                 new StatementRow(DAY, new BigDecimal("-12.50"), "rewe markt"),

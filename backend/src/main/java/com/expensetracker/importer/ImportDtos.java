@@ -16,6 +16,7 @@ import java.util.List;
 public final class ImportDtos {
 
     static final int MAX_ROWS = 5000;
+    static final int MAX_FILES = 12;
 
     private ImportDtos() {
     }
@@ -41,5 +42,12 @@ public final class ImportDtos {
     }
 
     public record ImportResult(int imported) {
+    }
+
+    /** Entries read from one uploaded statement, or why it could not be read. */
+    public record StatementFile(String fileName, List<StatementTextParser.ParsedRow> rows, String error) {
+    }
+
+    public record StatementsResponse(List<StatementFile> files) {
     }
 }

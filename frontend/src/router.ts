@@ -25,7 +25,8 @@ export const router = createRouter({
     { path: '/reset-password', name: 'reset-password', component: PasswordResetView, meta: { public: true } },
     { path: '/', name: 'dashboard', component: DashboardView },
     { path: '/expenses', name: 'expenses', component: () => import('./views/ExpensesView.vue') },
-    { path: '/import', name: 'import', component: () => import('./views/ImportView.vue') },
+    // Importing moved into the entry dialog
+    { path: '/import', redirect: { path: '/expenses', query: { new: 'expense' } } },
     { path: '/budgets', name: 'budgets', component: () => import('./views/BudgetsView.vue') },
     { path: '/recurring', name: 'recurring', component: () => import('./views/RecurringView.vue') },
     { path: '/categories', name: 'categories', component: () => import('./views/CategoriesView.vue') },

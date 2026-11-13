@@ -163,6 +163,17 @@ export interface StatementRow {
   description: string
 }
 
+/** Entry read from a PDF statement; signCertain is false when the PDF showed no sign and it was guessed */
+export interface ParsedStatementRow extends StatementRow {
+  signCertain: boolean
+}
+
+export interface StatementFile {
+  fileName: string
+  rows: ParsedStatementRow[]
+  error: string | null
+}
+
 export interface ImportPreviewRow {
   categoryId: number | null
   duplicate: boolean
@@ -228,11 +239,13 @@ function refreshSession(): Promise<boolean> {
 async function send(path: string, init: RequestInit = {}, retryOn401 = true): Promise<Response> {
   const method = (init.method ?? 'GET').toUpperCase()
   const csrf = SAFE_METHODS.includes(method) ? null : await csrfToken()
+  // The browser sets the multipart boundary itself for uploads
+  const isUpload = init.body instanceof FormData
   const response = await fetch(`/api${path}`, {
     ...init,
     credentials: 'same-origin',
     headers: {
-      'Content-Type': 'application/json',
+      ...(isUpload ? {} : { 'Content-Type': 'application/json' }),
       ...(csrf ? { 'X-XSRF-TOKEN': csrf } : {}),
       ...init.headers,
     },
@@ -331,6 +344,11 @@ export const api = {
   suggestCategory: (description: string, kind: CategoryKind) =>
     request<{ categoryId: number | null }>(`/rules/suggest${queryString({ description, kind })}`),
 
+  readStatements(files: File[]) {
+    const body = new FormData()
+    files.forEach((file) => body.append('files', file))
+    return request<{ files: StatementFile[] }>('/import/statements', { method: 'POST', body })
+  },
   importPreview: (rows: StatementRow[]) =>
     request<{ rows: ImportPreviewRow[] }>('/import/preview', { method: 'POST', body: JSON.stringify({ rows }) }),
   importRows: (rows: ExpenseInput[]) =>

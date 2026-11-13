@@ -9,12 +9,15 @@ import com.expensetracker.expense.Expense;
 import com.expensetracker.expense.ExpenseRepository;
 import com.expensetracker.expense.ExpenseRequest;
 import com.expensetracker.importer.ImportDtos.PreviewRow;
+import com.expensetracker.importer.ImportDtos.StatementFile;
 import com.expensetracker.importer.ImportDtos.StatementRow;
 import com.expensetracker.rule.CategoryRule;
 import com.expensetracker.rule.CategoryRuleService;
 import com.expensetracker.rule.RuleMatcher;
 import java.math.BigDecimal;
+import java.io.IOException;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
@@ -25,6 +28,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 /** Imports bank statements that the client has already parsed and mapped. */
 @Service
@@ -35,13 +39,48 @@ public class ImportService {
     private final CategoryService categories;
     private final CategoryRuleService rules;
     private final CurrentUser currentUser;
+    private final StatementPdfReader pdfReader;
+    private final Clock clock;
 
     public ImportService(ExpenseRepository expenses, CategoryService categories, CategoryRuleService rules,
-                         CurrentUser currentUser) {
+                         CurrentUser currentUser, StatementPdfReader pdfReader, Clock clock) {
         this.expenses = expenses;
         this.categories = categories;
         this.rules = rules;
         this.currentUser = currentUser;
+        this.pdfReader = pdfReader;
+        this.clock = clock;
+    }
+
+    /** Reads the entries of PDF bank statements. Nothing is stored; the client previews and confirms them. */
+    public List<StatementFile> readStatements(List<MultipartFile> files) {
+        if (files.size() > ImportDtos.MAX_FILES) {
+            throw new IllegalArgumentException("Höchstens " + ImportDtos.MAX_FILES + " Dateien auf einmal");
+        }
+        return files.stream().map(this::readStatement).toList();
+    }
+
+    private StatementFile readStatement(MultipartFile file) {
+        String name = file.getOriginalFilename() != null ? file.getOriginalFilename() : "Datei";
+        try {
+            byte[] bytes = file.getBytes();
+            if (!isPdf(bytes)) {
+                return new StatementFile(name, List.of(), "Keine PDF-Datei");
+            }
+            var rows = StatementTextParser.parse(pdfReader.lines(bytes), LocalDate.now(clock));
+            return rows.isEmpty()
+                    ? new StatementFile(name, rows, "Keine Buchungen erkannt – das Layout dieser Bank wird noch nicht unterstützt")
+                    : new StatementFile(name, rows, null);
+        } catch (IllegalArgumentException e) {
+            return new StatementFile(name, List.of(), e.getMessage());
+        } catch (IOException e) {
+            return new StatementFile(name, List.of(), "Die Datei konnte nicht gelesen werden");
+        }
+    }
+
+    /** Checks the file signature rather than the name or the type the browser claims. */
+    private static boolean isPdf(byte[] bytes) {
+        return bytes.length > 4 && bytes[0] == '%' && bytes[1] == 'P' && bytes[2] == 'D' && bytes[3] == 'F';
     }
 
     public List<PreviewRow> preview(List<StatementRow> rows) {
