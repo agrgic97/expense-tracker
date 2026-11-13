@@ -19,3 +19,12 @@ watch(
 )
 
 createApp(App).use(router).mount('#app')
+
+// Only in production builds: in development the service worker would serve stale modules
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // the app works without it, just not offline or installable
+    })
+  })
+}
